@@ -7,12 +7,19 @@ import 'package:studio_os/core/storage/secure_storage.dart';
 
 part 'dio_client.g.dart';
 
+//===================================
+// DIO CLIENT PROVIDER
+//===================================
 // keepAlive: true — Dio must never be disposed while requests are in flight.
 // Without this, autoDispose tears down the provider (and its Ref) between
 // navigations, causing "Ref used after disposal" errors in the interceptor.
 @Riverpod(keepAlive: true)
 Dio dio(Ref ref) {
   final storage = ref.watch(secureStorageProvider);
+  
+  //===================================
+  // BASE CONFIGURATION
+  //===================================
   final dio = Dio(
     BaseOptions(
       baseUrl: ApiConstants.baseUrl,
@@ -22,6 +29,9 @@ Dio dio(Ref ref) {
     ),
   );
 
+  //===================================
+  // INTERCEPTORS
+  //===================================
   dio.interceptors.add(AuthInterceptor(storage));
   dio.interceptors.add(LoggingInterceptor());
 

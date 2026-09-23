@@ -8,7 +8,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 import 'core/theme/app_theme.dart';
 // import 'package:firebase_core/firebase_core.dart';
 
-// Helper to safely open Hive box with corruption recovery
+//===================================
+// STORAGE HELPERS
+//===================================
 /*Future<void> _safeOpenBox<T>(String boxName) async {
   try {
     if (!Hive.isBoxOpen(boxName)) {
@@ -24,6 +26,9 @@ import 'core/theme/app_theme.dart';
   }
 }*/
 
+//===================================
+// APP ENTRY POINT
+//===================================
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   /*
@@ -50,6 +55,9 @@ Future<void> main() async {
   );
 }
 
+//===================================
+// ROOT WIDGET
+//===================================
 class MainApp extends ConsumerWidget {
   const MainApp({super.key});
 
@@ -60,9 +68,21 @@ class MainApp extends ConsumerWidget {
     return ShadApp.router(
       title: 'Studio OS',
       debugShowCheckedModeBanner: true,
+      
+      //===================================
+      // THEME INJECTION
+      //===================================
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
+      
+      //===================================
+      // ROUTING
+      //===================================
       // routerConfig: router,
+      
+      //===================================
+      // SYSTEM UI CONFIG
+      //===================================
       builder: (context, child) {
         final brightness = Theme.of(context).brightness;
         SystemChrome.setSystemUIOverlayStyle(

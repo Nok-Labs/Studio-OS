@@ -3,6 +3,9 @@ import 'package:shadcn_ui/shadcn_ui.dart';
 
 @immutable
 class AppColorScheme extends ShadColorScheme {
+  //===================================
+  // BASE CONSTRUCTOR
+  //===================================
   const AppColorScheme({
     required super.background,
     required super.foreground,
@@ -27,6 +30,9 @@ class AppColorScheme extends ShadColorScheme {
     super.custom,
   });
 
+  //===================================
+  // LIGHT MODE COLORS
+  //===================================
   const AppColorScheme.light({
     super.background = const Color(0xffffffff),
     super.foreground = const Color(0xff09090b),
@@ -51,6 +57,9 @@ class AppColorScheme extends ShadColorScheme {
     super.custom,
   });
 
+  //===================================
+  // DARK MODE COLORS
+  //===================================
   const AppColorScheme.dark({
     super.background = const Color(0xff0c0a09),
     super.foreground = const Color(0xfff2f2f2),
