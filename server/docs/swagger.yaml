@@ -1,0 +1,15 @@
+basePath: /
+host: localhost:8080
+info:
+  contact: {}
+  description: Backend for Studio OS — auth, delivery, billing, and milestones.
+  title: Studio OS API
+  version: "1.0"
+paths: {}
+securityDefinitions:
+  BearerAuth:
+    description: Type "Bearer" followed by a space and the JWT access token.
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"
