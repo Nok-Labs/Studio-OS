@@ -35,7 +35,13 @@ type Querier interface {
 	// ===================================
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeactivateUser(ctx context.Context, id uuid.UUID) error
+	DeleteInvitation(ctx context.Context, id uuid.UUID) error
 	DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) error
+	DeleteOTP(ctx context.Context, id uuid.UUID) error
+	DeleteProfile(ctx context.Context, userID uuid.UUID) error
+	DeleteRefreshToken(ctx context.Context, id uuid.UUID) error
+	DeleteUser(ctx context.Context, id uuid.UUID) error
+	GetInvitationByID(ctx context.Context, id uuid.UUID) (Invitation, error)
 	GetInvitationByToken(ctx context.Context, tokenHash string) (Invitation, error)
 	// ===================================
 	// OAUTH

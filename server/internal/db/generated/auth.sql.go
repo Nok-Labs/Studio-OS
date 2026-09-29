@@ -254,6 +254,16 @@ func (q *Queries) DeactivateUser(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteInvitation = `-- name: DeleteInvitation :exec
+DELETE FROM invitations
+WHERE id = $1
+`
+
+func (q *Queries) DeleteInvitation(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteInvitation, id)
+	return err
+}
+
 const deleteOAuthConnection = `-- name: DeleteOAuthConnection :exec
 DELETE FROM oauth_connections
 WHERE user_id = $1 AND provider = $2
@@ -267,6 +277,66 @@ type DeleteOAuthConnectionParams struct {
 func (q *Queries) DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) error {
 	_, err := q.db.Exec(ctx, deleteOAuthConnection, arg.UserID, arg.Provider)
 	return err
+}
+
+const deleteOTP = `-- name: DeleteOTP :exec
+DELETE FROM otp_codes
+WHERE id = $1
+`
+
+func (q *Queries) DeleteOTP(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteOTP, id)
+	return err
+}
+
+const deleteProfile = `-- name: DeleteProfile :exec
+DELETE FROM profiles
+WHERE user_id = $1
+`
+
+func (q *Queries) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteProfile, userID)
+	return err
+}
+
+const deleteRefreshToken = `-- name: DeleteRefreshToken :exec
+DELETE FROM refresh_tokens
+WHERE id = $1
+`
+
+func (q *Queries) DeleteRefreshToken(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteRefreshToken, id)
+	return err
+}
+
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users
+WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
+}
+
+const getInvitationByID = `-- name: GetInvitationByID :one
+SELECT id, email, token_hash, invited_by, expires_at, accepted_at, created_at FROM invitations
+WHERE id = $1
+`
+
+func (q *Queries) GetInvitationByID(ctx context.Context, id uuid.UUID) (Invitation, error) {
+	row := q.db.QueryRow(ctx, getInvitationByID, id)
+	var i Invitation
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.TokenHash,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const getInvitationByToken = `-- name: GetInvitationByToken :one

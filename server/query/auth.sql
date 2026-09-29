@@ -40,6 +40,10 @@ UPDATE users
 SET is_deactivated = true
 WHERE id = $1;
 
+-- name: DeleteUser :exec
+DELETE FROM users
+WHERE id = $1;
+
 -- ===================================
 -- PROFILE
 -- ===================================
@@ -77,6 +81,10 @@ RETURNING *;
 SELECT EXISTS(
   SELECT 1 FROM profiles WHERE username = $1
 );
+
+-- name: DeleteProfile :exec
+DELETE FROM profiles
+WHERE user_id = $1;
 
 -- ===================================
 -- OAUTH
@@ -127,6 +135,10 @@ UPDATE refresh_tokens
 SET revoked_at = now()
 WHERE user_id = $1 AND revoked_at IS NULL;
 
+-- name: DeleteRefreshToken :exec
+DELETE FROM refresh_tokens
+WHERE id = $1;
+
 -- ===================================
 -- OTP
 -- ===================================
@@ -160,6 +172,10 @@ UPDATE otp_codes
 SET used_at = now()
 WHERE id = $1;
 
+-- name: DeleteOTP :exec
+DELETE FROM otp_codes
+WHERE id = $1;
+
 -- ===================================
 -- INVITATIONS
 -- ===================================
@@ -169,6 +185,10 @@ INSERT INTO invitations (email, token_hash, invited_by, expires_at)
 VALUES ($1, $2, $3, $4)
 RETURNING *;
 
+-- name: GetInvitationByID :one
+SELECT * FROM invitations
+WHERE id = $1;
+
 -- name: GetInvitationByToken :one
 SELECT * FROM invitations
 WHERE token_hash = $1 AND accepted_at IS NULL AND expires_at > now();
@@ -176,4 +196,8 @@ WHERE token_hash = $1 AND accepted_at IS NULL AND expires_at > now();
 -- name: MarkInvitationAccepted :exec
 UPDATE invitations
 SET accepted_at = now()
+WHERE id = $1;
+
+-- name: DeleteInvitation :exec
+DELETE FROM invitations
 WHERE id = $1;
