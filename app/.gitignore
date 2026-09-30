@@ -45,5 +45,10 @@ app.*.map.json
 /android/app/release
 
 # Generated code
-*.g.dart
-*.freezed.dart
+#
+# NOTE: generated Dart files are deliberately NOT ignored. Every provider
+# file has `part '*.g.dart'`, so ignoring them leaves a fresh clone unable to
+# compile until codegen is run by hand. The requirements doc (Studio OS
+# Requirements.md, "Go and Flutter conventions") says to keep generated code
+# "out of code review focus but in version control", and CI runs
+# build_runner then fails if the committed output differs.

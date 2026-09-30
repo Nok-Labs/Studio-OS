@@ -2,11 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'core/theme/app_theme.dart';
+
+// Not yet enabled — re-add these alongside the initialization block below
+// when Hive and Firebase are switched on. Leaving them imported while unused
+// fails `flutter analyze --fatal-infos` in CI.
 // import 'package:firebase_core/firebase_core.dart';
+// import 'package:google_fonts/google_fonts.dart';
 
 //===================================
 // STORAGE HELPERS
@@ -68,18 +72,18 @@ class MainApp extends ConsumerWidget {
     return ShadApp.router(
       title: 'Studio OS',
       debugShowCheckedModeBanner: true,
-      
+
       //===================================
       // THEME INJECTION
       //===================================
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      
+
       //===================================
       // ROUTING
       //===================================
       // routerConfig: router,
-      
+
       //===================================
       // SYSTEM UI CONFIG
       //===================================
