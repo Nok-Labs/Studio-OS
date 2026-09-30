@@ -63,6 +63,12 @@ type mockAuthRepository struct {
 	GetInvitationByTokenFn   func(ctx context.Context, tokenHash string) (db.Invitation, error)
 	MarkInvitationAcceptedFn func(ctx context.Context, id uuid.UUID) error
 	DeleteInvitationFn       func(ctx context.Context, id uuid.UUID) error
+
+	// Transactions
+	// WithTxHookFn overrides the default WithTx behaviour so a test can
+	// simulate a rollback, a commit failure, or a repository with no
+	// transaction source configured.
+	WithTxHookFn func(ctx context.Context, fn func(repository.AuthRepository) error) error
 }
 
 // User implementations
@@ -314,6 +320,18 @@ func (mock *mockAuthRepository) DeleteInvitation(ctx context.Context, id uuid.UU
 		return mock.DeleteInvitationFn(ctx, id)
 	}
 	return errors.New("DeleteInvitation not implemented")
+}
+
+// WithTx runs fn and returns its error, as a committed transaction would.
+//
+// Defaulting to the mock itself keeps existing tests working without having to
+// stub the transaction boundary. Tests that care about atomicity should set
+// WithTxFn so the outcome is explicit.
+func (mock *mockAuthRepository) WithTx(ctx context.Context, fn func(repository.AuthRepository) error) error {
+	if mock.WithTxHookFn != nil {
+		return mock.WithTxHookFn(ctx, fn)
+	}
+	return fn(mock)
 }
 
 // Compile-time check

@@ -7,6 +7,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,15 +85,101 @@ type AuthRepository interface {
 	GetInvitationByToken(ctx context.Context, tokenHash string) (db.Invitation, error)
 	MarkInvitationAccepted(ctx context.Context, id uuid.UUID) error
 	DeleteInvitation(ctx context.Context, id uuid.UUID) error
+
+	// ===================================
+	// TRANSACTIONS
+	// ===================================
+
+	// WithTx runs fn inside a single database transaction, committing when fn
+	// returns nil and rolling back when it returns an error or panics.
+	//
+	// The repo handed to fn is backed by the transaction, so every call fn
+	// makes runs inside it. fn must use that repo, not the receiver.
+	//
+	// Why this exists: SELECT ... FOR UPDATE only holds its row lock until the
+	// end of the enclosing transaction. In autocommit mode each statement is
+	// its own transaction, so the lock is released the moment the SELECT
+	// returns and a concurrent request reads the row before the first one has
+	// written to it. Anything that reads a row to make a decision and then
+	// writes based on it — counting OTP attempts, redeeming a code, deleting a
+	// user and their profile — has to run here or the decision is made against
+	// stale state.
+	WithTx(ctx context.Context, fn func(AuthRepository) error) error
+}
+
+// ErrTransactionsUnsupported is returned by WithTx when the repository was
+// built without a transaction source. Production wiring must supply one via
+// WithTxSource; tests that never exercise WithTx can omit it.
+var ErrTransactionsUnsupported = errors.New(
+	"repository: transactions are not configured; pass WithTxSource when constructing the repository",
+)
+
+// TxBeginner opens a database transaction. *pgxpool.Pool satisfies it.
+type TxBeginner interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+// RepositoryOption customises a repository at construction time.
+type RepositoryOption func(*authRepositoryImpl)
+
+// WithTxSource enables WithTx on the repository by supplying the pool or
+// connection that transactions are started from.
+func WithTxSource(beginner TxBeginner) RepositoryOption {
+	return func(repo *authRepositoryImpl) {
+		repo.beginner = beginner
+	}
 }
 
 type authRepositoryImpl struct {
-	queries db.Querier
+	queries  db.Querier
+	beginner TxBeginner
 }
 
 // NewAuthRepository creates a new AuthRepository instance backed by db.Querier.
-func NewAuthRepository(queries db.Querier) AuthRepository {
-	return &authRepositoryImpl{queries: queries}
+//
+// Without the WithTxSource option the repository still works, but WithTx
+// returns ErrTransactionsUnsupported — pass it in anything that serves traffic.
+func NewAuthRepository(queries db.Querier, opts ...RepositoryOption) AuthRepository {
+	repo := &authRepositoryImpl{queries: queries}
+	for _, opt := range opts {
+		opt(repo)
+	}
+	return repo
+}
+
+// WithTx runs fn in a transaction, committing on success and rolling back on
+// error or panic.
+func (repo *authRepositoryImpl) WithTx(ctx context.Context, fn func(AuthRepository) error) error {
+	if repo.beginner == nil {
+		return ErrTransactionsUnsupported
+	}
+
+	tx, err := repo.beginner.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("repository: begin transaction: %w", err)
+	}
+
+	// Rollback after a successful commit is a no-op that reports
+	// ErrTxClosed, which pgx makes safe to ignore. Rolling back on panic is
+	// not optional: an aborted handler must not leave locks held.
+	committed := false
+	defer func() {
+		if !committed {
+			if rbErr := tx.Rollback(ctx); rbErr != nil && !errors.Is(rbErr, pgx.ErrTxClosed) {
+				log.Printf("auth repository: rollback failed: %v", rbErr)
+			}
+		}
+	}()
+
+	if err := fn(&authRepositoryImpl{queries: db.New(tx)}); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("repository: commit transaction: %w", err)
+	}
+	committed = true
+	return nil
 }
 
 // ===================================
