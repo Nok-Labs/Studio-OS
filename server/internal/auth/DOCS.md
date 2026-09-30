@@ -72,13 +72,20 @@ server/internal/auth/
 │   ├── oauth/
 │   │   ├── google.go          # Google ID Token validator
 │   │   └── provider.go        # Provider interface & Identity model
-│   ├── invitation_service.go  # InvitationService (Invite, GetInvitation, RevokeInvitation)
-│   ├── password_service.go    # PasswordService (ForgotPassword, ResetPassword, ChangePassword)
-│   ├── profile_service.go     # ProfileService (GetProfile, UpdateProfile, DeleteProfile, CheckUsernameAvailable)
-│   ├── services.go            # Aggregated Services container & NewServices constructor
-│   ├── session_service.go     # SessionService (Login, Refresh, Logout, OAuthLogin)
-│   ├── signup_service.go      # SignupService (Signup, VerifyEmail, ResendOTP, AcceptInvite)
-│   └── user_admin_service.go  # UserAdminService (SuspendUser, UnsuspendUser, DeactivateUser, DeleteUser)
+│   ├── invitation_service.go      # InvitationService (Invite, GetInvitation, RevokeInvitation)
+│   ├── invitation_service_test.go # Invitation unit tests
+│   ├── mock_repository_test.go    # In-memory mock AuthRepository, Mailer, and OAuth provider
+│   ├── password_service.go        # PasswordService (ForgotPassword, ResetPassword, ChangePassword)
+│   ├── password_service_test.go   # Password unit tests
+│   ├── profile_service.go         # ProfileService (GetProfile, UpdateProfile, DeleteProfile, CheckUsernameAvailable)
+│   ├── profile_service_test.go    # Profile unit tests
+│   ├── services.go                # Aggregated Services container & NewServices constructor
+│   ├── session_service.go         # SessionService (Login, Refresh, Logout, OAuthLogin)
+│   ├── session_service_test.go    # Session unit tests (timing attack dummy compare, replay detection)
+│   ├── signup_service.go          # SignupService (Signup, VerifyEmail, ResendOTP, AcceptInvite)
+│   ├── signup_service_test.go     # Signup unit tests
+│   ├── user_admin_service.go      # UserAdminService (SuspendUser, UnsuspendUser, DeactivateUser, DeleteUser)
+│   └── user_admin_service_test.go # Admin unit tests
 └── utils/
     ├── jwt.go                 # HS256 JWT generation and claim verification
     ├── password.go            # Bcrypt hashing & constant-time dummy comparisons
