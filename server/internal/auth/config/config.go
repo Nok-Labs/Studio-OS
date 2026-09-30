@@ -2,7 +2,11 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"time"
+
+	"golang.org/x/crypto/bcrypt"
 
 	"server/internal/auth/service/oauth"
 )
@@ -104,4 +108,83 @@ func DefaultConfig() AuthConfig {
 			Providers: make(map[string]oauth.Provider),
 		},
 	}
+}
+
+// Validate reports configuration that would fail at runtime, so a bad deploy
+// is caught at startup instead of on the first login attempt.
+//
+// Call this once while wiring the application, before serving traffic. The
+// alternative — letting utils.HashPassword reject the bad value — converts a
+// config typo into a total auth outage, because login is the one endpoint that
+// must never be unavailable, and it fails precisely when someone is attacking
+// it.
+//
+// Intended call site, once the HTTP wiring lands:
+//
+//	cfg := config.DefaultConfig() // then override from the environment
+//	if err := cfg.Validate(); err != nil {
+//		return fmt.Errorf("invalid auth configuration: %w", err)
+//	}
+func (c AuthConfig) Validate() error {
+	var errs []error
+
+	if c.Password.BcryptCost < bcrypt.MinCost || c.Password.BcryptCost > bcrypt.MaxCost {
+		errs = append(errs, fmt.Errorf(
+			"auth: Password.BcryptCost is %d, outside the allowed range %d..%d; "+
+				"requirement SEC-06 sets a minimum of 12",
+			c.Password.BcryptCost, bcrypt.MinCost, bcrypt.MaxCost,
+		))
+	} else if c.Password.BcryptCost < 12 {
+		// Not fatal on its own — bcrypt accepts 4..31 — but SEC-06 requires 12
+		// or higher, and a low factor is a silent security downgrade, so it
+		// should not survive a review unnoticed.
+		errs = append(errs, fmt.Errorf(
+			"auth: Password.BcryptCost is %d, below the minimum of 12 required by SEC-06",
+			c.Password.BcryptCost,
+		))
+	}
+
+	if c.Password.MinLength < 1 {
+		errs = append(errs, fmt.Errorf(
+			"auth: Password.MinLength is %d, must be at least 1", c.Password.MinLength,
+		))
+	}
+
+	if c.Verification.MaxOTPAttempts < 1 {
+		errs = append(errs, fmt.Errorf(
+			"auth: Verification.MaxOTPAttempts is %d, must be at least 1; "+
+				"zero would let any number of OTP guesses through the gate",
+			c.Verification.MaxOTPAttempts,
+		))
+	}
+
+	if c.Verification.OTPTTL <= 0 {
+		errs = append(errs, fmt.Errorf(
+			"auth: Verification.OTPTTL is %v, must be positive", c.Verification.OTPTTL,
+		))
+	}
+
+	if c.Session.AccessTokenTTL <= 0 {
+		errs = append(errs, fmt.Errorf(
+			"auth: Session.AccessTokenTTL is %v, must be positive", c.Session.AccessTokenTTL,
+		))
+	}
+
+	if c.Session.RefreshTokenTTL <= c.Session.AccessTokenTTL {
+		errs = append(errs, fmt.Errorf(
+			"auth: Session.RefreshTokenTTL (%v) must exceed AccessTokenTTL (%v)",
+			c.Session.RefreshTokenTTL, c.Session.AccessTokenTTL,
+		))
+	}
+
+	switch c.Registration.Mode {
+	case RegistrationModeOpen, RegistrationModeInviteOnly:
+	default:
+		errs = append(errs, fmt.Errorf(
+			"auth: Registration.Mode is %q, want %q or %q",
+			c.Registration.Mode, RegistrationModeOpen, RegistrationModeInviteOnly,
+		))
+	}
+
+	return errors.Join(errs...)
 }
