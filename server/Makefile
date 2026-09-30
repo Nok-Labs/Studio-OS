@@ -4,8 +4,8 @@
 # only needs updating in one place.
 SQLC_OUT   := internal/db/generated
 DOCS_OUT   := docs
-BINARY_OUT := bin/server
-MAIN_PKG   := ./cmd/server
+BINARY_OUT := bin/api
+MAIN_PKG   := ./cmd/api
 
 # `go build $(MAIN_PKG)` (rather than `go build ./...`) is what actually
 # writes BINARY_OUT. Building the ./... pattern compiles every package but
@@ -39,7 +39,7 @@ sqlc:
 	sqlc generate
 
 swag:
-	swag init -g cmd/server/main.go -o $(DOCS_OUT)
+	swag init -g cmd/api/main.go -o $(DOCS_OUT)
 
 generate: sqlc swag
 
