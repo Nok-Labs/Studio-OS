@@ -20,6 +20,7 @@ import (
 
 	"server/internal/auth/config"
 	authhandler "server/internal/auth/handler"
+	"server/internal/auth/model"
 	"server/internal/auth/repository"
 	"server/internal/auth/service"
 	"server/internal/auth/utils"
@@ -76,8 +77,21 @@ func main() {
 	}
 	jwtIssuer := utils.NewJWTIssuer(jwtSecret)
 
-	// Initialize Mailer (NoOp for local dev until real one is integrated)
-	mailService := mailer.NewNoOpMailer()
+	// Initialize Mailer
+	var mailService model.Mailer
+	resendKey := os.Getenv("RESEND_API_KEY")
+	resendFrom := os.Getenv("RESEND_FROM_ADDRESS")
+	if resendFrom == "" {
+		resendFrom = "onboarding@resend.dev"
+	}
+
+	if resendKey != "" {
+		mailService = mailer.NewResendMailer(resendKey, resendFrom)
+		slog.Info("Initialized Resend Mailer", "from", resendFrom)
+	} else {
+		slog.Warn("RESEND_API_KEY is missing, falling back to NoOpMailer (emails will only be logged)")
+		mailService = mailer.NewNoOpMailer()
+	}
 
 	// Initialize Auth Config
 	authCfg := config.DefaultConfig()

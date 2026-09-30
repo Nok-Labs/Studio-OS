@@ -49,6 +49,7 @@ require (
 	github.com/mattn/go-colorable v0.1.15 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/resend/resend-go/v2 v2.28.0 // indirect
 	github.com/rogpeppe/go-internal v1.16.0 // indirect
 	github.com/sv-tools/openapi v0.4.0 // indirect
 	github.com/swaggo/echo-swagger v1.5.2 // indirect
