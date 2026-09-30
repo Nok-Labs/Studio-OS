@@ -91,12 +91,28 @@ func main() {
 
 	// Initialize Mailer.
 	//
-	// RESEND_API_KEY is required, so the no-op mailer is unreachable in a
-	// configured deployment. That is deliberate: a no-op mailer accepts
-	// signups, logs the OTP to stdout and returns 201, so nobody receives a
-	// verification code and nothing in the response hints at why.
-	mailService := model.Mailer(mailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFromAddress, cfg.AppBaseURL))
-	slog.Info("Initialized Resend Mailer", "from", cfg.ResendFromAddress)
+	// Mail transport. A missing RESEND_API_KEY falls back to a no-op mailer
+	// rather than refusing to boot, so someone without a Resend account can
+	// still run the server locally.
+	//
+	// The fallback is deliberately loud. It is a real footgun: a no-op mailer
+	// accepts signups, writes the OTP to the log and returns 201, so nobody
+	// receives a verification code and nothing in the response says why. What
+	// matters is that this state is impossible to mistake for a healthy one —
+	// anyone tailing the boot log, or reading a support issue where the user
+	// "never got the email", sees it immediately.
+	var mailService model.Mailer
+	if cfg.MailConfigured {
+		mailService = mailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFromAddress, cfg.AppBaseURL)
+		slog.Info("Initialized Resend Mailer", "from", cfg.ResendFromAddress)
+	} else {
+		mailService = mailer.NewNoOpMailer()
+		slog.Warn("RESEND_API_KEY is not set: falling back to the no-op mailer. "+
+			"Emails will NOT be delivered — verification codes, password resets and "+
+			"invitations are written to the log instead. This is expected for local "+
+			"development, and a misconfiguration anywhere else.",
+			"hint", "set RESEND_API_KEY and RESEND_FROM_ADDRESS to send real mail")
+	}
 
 	// Initialize Auth Config
 	authCfg := authconfig.DefaultConfig()

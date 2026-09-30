@@ -114,11 +114,71 @@ func TestLoadRejectsEveryMissingVariableAtOnce(t *testing.T) {
 	}
 	msg := err.Error()
 	for _, want := range []string{
-		"DATABASE_URL", "JWT_SECRET", "RESEND_API_KEY", "RESEND_FROM_ADDRESS",
+		"DATABASE_URL", "JWT_SECRET",
 	} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("error does not mention %s:\n%s", want, msg)
 		}
+	}
+}
+
+// TestLoadAllowsMissingResendKey is the load-bearing test for the no-op
+// mailer fallback. Someone without a Resend account must still be able to run
+// the server, so an absent key is a warning, not a boot failure.
+//
+// It is also the reason a silent fallback would be dangerous, which is why
+// MailConfigured is asserted here: the caller must be able to tell that no
+// real mail will be sent.
+func TestLoadAllowsMissingResendKey(t *testing.T) {
+	clearEnv(t)
+	env := validEnv()
+	delete(env, "RESEND_API_KEY")
+	delete(env, "RESEND_FROM_ADDRESS")
+	setEnv(t, env)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil so a developer without a Resend key can still boot", err)
+	}
+	if cfg.ResendAPIKey != "" {
+		t.Fatalf("ResendAPIKey = %q, want empty", cfg.ResendAPIKey)
+	}
+	if cfg.MailConfigured {
+		t.Fatal("MailConfigured = true with no Resend key; the caller would believe mail is being sent")
+	}
+}
+
+func TestLoadReportsMailConfiguredWhenTheKeyIsPresent(t *testing.T) {
+	clearEnv(t)
+	setEnv(t, validEnv())
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	if !cfg.MailConfigured {
+		t.Fatal("MailConfigured = false with a Resend key set; the caller would silently use the no-op mailer")
+	}
+}
+
+// TestLoadRequiresFromAddressOnlyWhenKeyIsPresent pins the conditional. With a
+// key set, a missing sender is a genuine misconfiguration — Resend rejects
+// unverified senders, so the deployment would boot and then fail on the first
+// real signup. Without a key, demanding one would block local setup over a
+// value nothing would read.
+func TestLoadRequiresFromAddressOnlyWhenKeyIsPresent(t *testing.T) {
+	clearEnv(t)
+	env := validEnv()
+	env["RESEND_API_KEY"] = "re_test"
+	env["RESEND_FROM_ADDRESS"] = ""
+	setEnv(t, env)
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() = nil error, want failure for a Resend key with no sender address")
+	}
+	if !strings.Contains(err.Error(), "RESEND_FROM_ADDRESS") {
+		t.Fatalf("error does not mention RESEND_FROM_ADDRESS:\n%s", err)
 	}
 }
 

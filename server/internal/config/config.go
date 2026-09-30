@@ -65,18 +65,37 @@ type Config struct {
 
 	// ResendAPIKey authenticates with the Resend transactional email API.
 	//
-	// Required. The alternative considered was a no-op mailer, which was
-	// rejected: with it, a production deploy that lost its API key would
-	// accept signups, log the OTP to stdout, and return 201 — and no user
-	// would ever receive a verification code, with nothing in the response to
-	// suggest why. Failing at boot is strictly better than failing silently
-	// for the lifetime of the deployment.
+	// Optional. When absent the application falls back to a no-op mailer that
+	// logs message bodies to stdout, which is what makes local development
+	// possible without a Resend account.
+	//
+	// The failure mode is real, so it is loud rather than fatal: a no-op
+	// mailer accepts signups, logs the OTP to stdout and returns 201, so
+	// nobody receives a verification code and nothing in the response
+	// indicates why. Boot is not blocked — a developer who has not signed up
+	// for an email provider should still be able to run the server — but the
+	// fallback is announced at WARN. A deployment that has quietly lost its
+	// key is then distinguishable from a healthy one at a glance, instead of
+	// sitting there for the lifetime of the deployment failing quietly.
 	ResendAPIKey string
 
 	// ResendFromAddress is the sender address Resend is configured to send
-	// from. Required, because Resend rejects unverified senders and would
-	// otherwise fail on the first real signup rather than at boot.
+	// from.
+	//
+	// Required only when ResendAPIKey is set, because Resend rejects
+	// unverified senders. Requiring it unconditionally would block a no-key
+	// local setup over a value nothing would ever read. When the key IS set
+	// and this is missing, that is a real misconfiguration and Load fails —
+	// otherwise the deployment boots, then fails on the first real signup.
 	ResendFromAddress string
+
+	// MailConfigured reports whether a real mail transport will be used.
+	//
+	// Load derives this rather than letting callers re-derive it, so the
+	// decision lives in exactly one place. It is false when ResendAPIKey is
+	// unset, meaning OTP codes and invitation links go to a no-op mailer and
+	// are written to the log instead of being delivered.
+	MailConfigured bool
 
 	// AllowedOrigins is the CORS allowlist. Optional; defaults to
 	// defaultDevOrigins. Set CORS_ALLOWED_ORIGINS to a comma-separated list
@@ -155,6 +174,10 @@ func Load() (*Config, error) {
 		cfg.AppBaseURL = "http://localhost:3000"
 	}
 
+	// Derived once, here, so the mailer decision is not re-derived by each
+	// caller and the two can never disagree.
+	cfg.MailConfigured = cfg.ResendAPIKey != ""
+
 	return cfg, cfg.validate()
 }
 
@@ -167,15 +190,25 @@ func (c *Config) validate() error {
 
 	// Required variables, reported as a set so an operator sees every gap.
 	required := map[string]string{
-		"DATABASE_URL":        c.DatabaseURL,
-		"JWT_SECRET":          c.JWTSecret,
-		"RESEND_API_KEY":      c.ResendAPIKey,
-		"RESEND_FROM_ADDRESS": c.ResendFromAddress,
+		"DATABASE_URL": c.DatabaseURL,
+		"JWT_SECRET":   c.JWTSecret,
 	}
 	for name, value := range required {
 		if strings.TrimSpace(value) == "" {
 			problems = append(problems, fmt.Sprintf("%s is required but unset", name))
 		}
+	}
+
+	// RESEND_FROM_ADDRESS is required only when a Resend key is present. A
+	// missing key falls back to a no-op mailer that logs to stdout, so
+	// demanding a sender address in that case would block a legitimate local
+	// setup over a value that would never be used. With a key set, though, a
+	// missing sender is a real misconfiguration: Resend rejects unverified
+	// senders, so the deployment would boot and then fail on the first real
+	// signup instead of here.
+	if c.ResendAPIKey != "" && strings.TrimSpace(c.ResendFromAddress) == "" {
+		problems = append(problems,
+			"RESEND_FROM_ADDRESS is required when RESEND_API_KEY is set")
 	}
 
 	// "Required" is not the same as "unguessable". A one-character secret
