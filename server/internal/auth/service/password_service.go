@@ -73,15 +73,26 @@ func (service *PasswordService) ForgotPassword(ctx context.Context, email string
 		return nil
 	}
 
-	// 5. Enforce cooldown to prevent spamming transactional email endpoints
+	// 5. Enforce cooldown to prevent spamming transactional email endpoints.
+	// ErrNotFound means there is nothing to invalidate; any other error is
+	// propagated so a transient database failure cannot cause a second reset
+	// code to be mailed out while the first is still live.
 	existingOTP, err := service.repo.GetValidOTP(ctx, user.ID, "password_reset")
-	if err == nil {
+	switch {
+	case err == nil:
 		timeSinceCreation := time.Since(existingOTP.CreatedAt)
 		if timeSinceCreation < service.config.Verification.ResendCooldown {
 			return autherr.ErrOTPCooldown
 		}
-		// Invalidate previous unconsumed OTP
-		_ = service.repo.MarkOTPUsed(ctx, existingOTP.ID)
+		// Invalidate the previous unconsumed OTP. On failure abort rather than
+		// issue a second live code for the same purpose.
+		if err := service.repo.MarkOTPUsed(ctx, existingOTP.ID); err != nil {
+			return err
+		}
+	case errors.Is(err, repository.ErrNotFound):
+		// No active code on record; fall through and issue a fresh one.
+	default:
+		return err
 	}
 
 	// 6. Generate CSPRNG 6-digit numeric code

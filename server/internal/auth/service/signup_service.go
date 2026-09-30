@@ -235,13 +235,16 @@ func (service *SignupService) ResendOTP(ctx context.Context, email string) error
 	// 1. Normalize email address
 	normalizedEmail := helpers.NormalizeEmail(email)
 
-	// 2. Fetch user by email; return nil silently on ErrNotFound to mitigate account enumeration
+	// 2. Fetch user by email. Only a genuine "no such user" is swallowed, to
+	// mitigate account enumeration (AUTH-16 style). Any other error is a real
+	// failure — a database outage must surface as an error, not as a silent
+	// success that leaves the caller believing an email was sent.
 	user, err := service.repo.GetUserByEmail(ctx, normalizedEmail)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			return nil
 		}
-		return nil
+		return err
 	}
 
 	// 3. Do not dispatch codes to already verified accounts
@@ -249,15 +252,27 @@ func (service *SignupService) ResendOTP(ctx context.Context, email string) error
 		return nil
 	}
 
-	// 4. Check if existing code was issued within the resend cooldown window
+	// 4. Check if an existing code was issued within the resend cooldown window.
+	// ErrNotFound simply means there is nothing to invalidate; any other error
+	// is propagated so a transient database failure cannot cause a second code
+	// to be mailed out while the first is still live.
 	existingOTP, err := service.repo.GetValidOTP(ctx, user.ID, "signup_verify")
-	if err == nil {
+	switch {
+	case err == nil:
 		timeSinceCreation := time.Since(existingOTP.CreatedAt)
 		if timeSinceCreation < service.config.Verification.ResendCooldown {
 			return autherr.ErrOTPCooldown
 		}
-		// 5. Invalidate previous unconsumed verification code
-		_ = service.repo.MarkOTPUsed(ctx, existingOTP.ID)
+		// 5. Invalidate the previous unconsumed verification code. If this fails
+		// we must abort: issuing a new code while the old one still verifies
+		// would leave two live codes for the same purpose.
+		if err := service.repo.MarkOTPUsed(ctx, existingOTP.ID); err != nil {
+			return err
+		}
+	case errors.Is(err, repository.ErrNotFound):
+		// No active code on record; fall through and issue a fresh one.
+	default:
+		return err
 	}
 
 	// 6. Generate fresh CSPRNG 6-digit numeric OTP code

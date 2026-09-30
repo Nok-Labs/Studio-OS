@@ -439,6 +439,114 @@ func TestSignupService_ResendOTP(t *testing.T) {
 			t.Fatalf("expected ErrOTPCooldown, got %v", err)
 		}
 	})
+
+	// Regression: these cases used to return nil, reporting success for a
+	// database outage and telling the caller an email had been sent.
+	t.Run("propagates a database error when looking up the user", func(t *testing.T) {
+		dbErr := errors.New("connection refused")
+		mockRepo := &mockAuthRepository{}
+		cfg := setupTestConfig()
+
+		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
+			return db.User{}, dbErr
+		}
+
+		signupService := NewSignupService(mockRepo, cfg, nil, nil)
+		err := signupService.ResendOTP(ctx, "jane@example.com")
+		if !errors.Is(err, dbErr) {
+			t.Fatalf("expected the underlying database error to propagate, got %v", err)
+		}
+	})
+
+	t.Run("propagates a database error when loading the existing OTP", func(t *testing.T) {
+		dbErr := errors.New("connection reset")
+		mockRepo := &mockAuthRepository{}
+		cfg := setupTestConfig()
+		testUserID := uuid.New()
+
+		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
+			return db.User{ID: testUserID, Email: email, EmailVerifiedAt: nil}, nil
+		}
+		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+			return db.OtpCode{}, dbErr
+		}
+
+		// A new code must NOT be issued when we could not read the current one.
+		createdNew := false
+		mockRepo.CreateOTPFn = func(ctx context.Context, userID uuid.UUID, codeHash, purpose string, expiresAt time.Time) (db.OtpCode, error) {
+			createdNew = true
+			return db.OtpCode{ID: uuid.New(), UserID: userID}, nil
+		}
+
+		signupService := NewSignupService(mockRepo, cfg, nil, nil)
+		err := signupService.ResendOTP(ctx, "jane@example.com")
+		if !errors.Is(err, dbErr) {
+			t.Fatalf("expected the underlying database error to propagate, got %v", err)
+		}
+		if createdNew {
+			t.Fatal("expected no new OTP to be created when the existing one could not be read")
+		}
+	})
+
+	t.Run("treats a missing existing OTP as nothing to invalidate", func(t *testing.T) {
+		mockRepo := &mockAuthRepository{}
+		cfg := setupTestConfig()
+		testUserID := uuid.New()
+
+		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
+			return db.User{ID: testUserID, Email: email, EmailVerifiedAt: nil}, nil
+		}
+		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+			return db.OtpCode{}, repository.ErrNotFound
+		}
+		createdNew := false
+		mockRepo.CreateOTPFn = func(ctx context.Context, userID uuid.UUID, codeHash, purpose string, expiresAt time.Time) (db.OtpCode, error) {
+			createdNew = true
+			return db.OtpCode{ID: uuid.New(), UserID: userID}, nil
+		}
+
+		signupService := NewSignupService(mockRepo, cfg, nil, nil)
+		if err := signupService.ResendOTP(ctx, "jane@example.com"); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !createdNew {
+			t.Fatal("expected a fresh OTP to be issued when no active code exists")
+		}
+	})
+
+	t.Run("aborts when the previous OTP cannot be invalidated", func(t *testing.T) {
+		mockRepo := &mockAuthRepository{}
+		cfg := setupTestConfig()
+		testUserID := uuid.New()
+		markErr := errors.New("deadlock detected")
+
+		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
+			return db.User{ID: testUserID, Email: email, EmailVerifiedAt: nil}, nil
+		}
+		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+			// Outside the cooldown window, so we attempt to invalidate it.
+			return db.OtpCode{ID: uuid.New(), UserID: userID, CreatedAt: time.Now().Add(-2 * time.Minute)}, nil
+		}
+		mockRepo.MarkOTPUsedFn = func(ctx context.Context, id uuid.UUID) error {
+			return markErr
+		}
+		createdNew := false
+		mockRepo.CreateOTPFn = func(ctx context.Context, userID uuid.UUID, codeHash, purpose string, expiresAt time.Time) (db.OtpCode, error) {
+			createdNew = true
+			return db.OtpCode{ID: uuid.New(), UserID: userID}, nil
+		}
+
+		signupService := NewSignupService(mockRepo, cfg, nil, nil)
+		err := signupService.ResendOTP(ctx, "jane@example.com")
+		if !errors.Is(err, markErr) {
+			t.Fatalf("expected the MarkOTPUsed error to propagate, got %v", err)
+		}
+		// Issuing a second live code while the first still verifies would let
+		// either one be used, so this must not proceed.
+		if createdNew {
+			t.Fatal("expected no new OTP when the previous one could not be invalidated")
+		}
+	})
 }
 
 func TestSignupService_AcceptInvite(t *testing.T) {
