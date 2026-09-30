@@ -36,7 +36,7 @@ func TestPasswordService_ForgotPassword(t *testing.T) {
 				PasswordHash: pgtype.Text{String: "hash", Valid: true},
 			}, nil
 		}
-		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+		mockRepo.GetValidOTPForUpdateFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
 			return db.OtpCode{}, repository.ErrNotFound
 		}
 		mockRepo.CreateOTPFn = func(ctx context.Context, userID uuid.UUID, codeHash, purpose string, expiresAt time.Time) (db.OtpCode, error) {
@@ -129,7 +129,7 @@ func TestPasswordService_ForgotPassword(t *testing.T) {
 				PasswordHash: pgtype.Text{String: "hash", Valid: true},
 			}, nil
 		}
-		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+		mockRepo.GetValidOTPForUpdateFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
 			return db.OtpCode{
 				ID:        uuid.New(),
 				UserID:    testUserID,

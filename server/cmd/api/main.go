@@ -95,7 +95,7 @@ func main() {
 	// configured deployment. That is deliberate: a no-op mailer accepts
 	// signups, logs the OTP to stdout and returns 201, so nobody receives a
 	// verification code and nothing in the response hints at why.
-	mailService := model.Mailer(mailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFromAddress))
+	mailService := model.Mailer(mailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFromAddress, cfg.AppBaseURL))
 	slog.Info("Initialized Resend Mailer", "from", cfg.ResendFromAddress)
 
 	// Initialize Auth Config

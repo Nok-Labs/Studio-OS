@@ -347,7 +347,7 @@ func TestSignupService_ResendOTP(t *testing.T) {
 		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
 			return db.User{ID: testUserID, Email: email, EmailVerifiedAt: nil}, nil
 		}
-		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+		mockRepo.GetValidOTPForUpdateFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
 			// Created 2 minutes ago (outside cooldown)
 			return db.OtpCode{
 				ID:        testOTPID,
@@ -424,7 +424,7 @@ func TestSignupService_ResendOTP(t *testing.T) {
 		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
 			return db.User{ID: testUserID, Email: email, EmailVerifiedAt: nil}, nil
 		}
-		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+		mockRepo.GetValidOTPForUpdateFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
 			// Created 10 seconds ago (inside 60s cooldown)
 			return db.OtpCode{
 				ID:        uuid.New(),
@@ -467,7 +467,7 @@ func TestSignupService_ResendOTP(t *testing.T) {
 		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
 			return db.User{ID: testUserID, Email: email, EmailVerifiedAt: nil}, nil
 		}
-		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+		mockRepo.GetValidOTPForUpdateFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
 			return db.OtpCode{}, dbErr
 		}
 
@@ -496,7 +496,7 @@ func TestSignupService_ResendOTP(t *testing.T) {
 		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
 			return db.User{ID: testUserID, Email: email, EmailVerifiedAt: nil}, nil
 		}
-		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+		mockRepo.GetValidOTPForUpdateFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
 			return db.OtpCode{}, repository.ErrNotFound
 		}
 		createdNew := false
@@ -523,7 +523,7 @@ func TestSignupService_ResendOTP(t *testing.T) {
 		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
 			return db.User{ID: testUserID, Email: email, EmailVerifiedAt: nil}, nil
 		}
-		mockRepo.GetValidOTPFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
+		mockRepo.GetValidOTPForUpdateFn = func(ctx context.Context, userID uuid.UUID, purpose string) (db.OtpCode, error) {
 			// Outside the cooldown window, so we attempt to invalidate it.
 			return db.OtpCode{ID: uuid.New(), UserID: userID, CreatedAt: time.Now().Add(-2 * time.Minute)}, nil
 		}
