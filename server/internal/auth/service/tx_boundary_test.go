@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"server/internal/auth/errors"
+	autherr "server/internal/auth/errors"
 	"server/internal/auth/repository"
 	"server/internal/auth/utils"
 	db "server/internal/db/generated"
