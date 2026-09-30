@@ -11,6 +11,7 @@ import (
 	"server/internal/auth/repository"
 	"server/internal/auth/service/helpers"
 	"server/internal/auth/utils"
+	db "server/internal/db/generated"
 )
 
 // SignupService handles user registration, email verification, and invitation acceptance.
@@ -119,6 +120,14 @@ func (service *SignupService) Signup(
 	if service.config.Profile.EnableDisplayName {
 		displayName = profileInput.DisplayName
 	}
+
+	// Reject a non-http(s) avatar before the user row is created. Validating
+	// here rather than at the repository means a bad value never reaches the
+	// database, so there is no window in which an unsafe URL is persisted and
+	// only rejected on a later read.
+	if err := helpers.ValidateAvatarURL(profileInput.AvatarURL); err != nil {
+		return nil, err
+	}
 	avatarURL = profileInput.AvatarURL
 
 	_, err = service.repo.CreateProfile(ctx, user.ID, firstName, lastName, username, displayName, nil, avatarURL)
@@ -152,7 +161,9 @@ func (service *SignupService) Signup(
 	}
 
 	// 9. If verification is optional, mark verified and issue tokens immediately
-	_ = service.repo.MarkEmailVerified(ctx, user.ID)
+	if err := service.repo.MarkEmailVerified(ctx, user.ID); err != nil {
+		return nil, err
+	}
 	return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
 }
 
@@ -275,42 +286,66 @@ func (service *SignupService) ResendOTP(ctx context.Context, email string) error
 		return nil
 	}
 
-	// 4. Check if an existing code was issued within the resend cooldown window.
-	// ErrNotFound simply means there is nothing to invalidate; any other error
-	// is propagated so a transient database failure cannot cause a second code
-	// to be mailed out while the first is still live.
-	existingOTP, err := service.repo.GetValidOTP(ctx, user.ID, "signup_verify")
-	switch {
-	case err == nil:
-		timeSinceCreation := time.Since(existingOTP.CreatedAt)
-		if timeSinceCreation < service.config.Verification.ResendCooldown {
-			return autherr.ErrOTPCooldown
-		}
-		// 5. Invalidate the previous unconsumed verification code. If this fails
-		// we must abort: issuing a new code while the old one still verifies
-		// would leave two live codes for the same purpose.
-		if err := service.repo.MarkOTPUsed(ctx, existingOTP.ID); err != nil {
-			return err
-		}
-	case errors.Is(err, repository.ErrNotFound):
-		// No active code on record; fall through and issue a fresh one.
-	default:
-		return err
-	}
-
-	// 6. Generate fresh CSPRNG 6-digit numeric OTP code
+	// 4-7. Read the previous code, decide, and issue the replacement — atomically.
+	//
+	// Every step has to be inside one transaction, including the INSERT.
+	// Marking the old code used and inserting the new one are two statements;
+	// if the insert happens after the lock is released, two concurrent resends
+	// can interleave as: A locks, marks used, commits; B locks, finds nothing
+	// valid, inserts; A inserts. Two live codes for one purpose, and neither
+	// request saw the other.
+	//
+	// SELECT ... FOR UPDATE is what serializes the read-decide step, and it
+	// only holds its row lock until the end of the enclosing transaction — so
+	// in autocommit mode it protects nothing at all.
+	//
+	// The code is generated before the transaction opens because it is pure
+	// computation with no database access; that keeps the lock held for the
+	// shortest possible window.
 	newCode, err := utils.GenerateOTP()
 	if err != nil {
 		return err
 	}
-
-	// 7. Store SHA-256 hash of new OTP with configured TTL
 	newHash := utils.HashToken(newCode)
 	expiresAt := time.Now().Add(service.config.Verification.OTPTTL)
 
-	_, err = service.repo.CreateOTP(ctx, user.ID, newHash, "signup_verify", expiresAt)
+	// The outcome is captured rather than returned from fn: a cooldown
+	// rejection has no writes to commit, but returning the error would abort
+	// the transaction before the not-found case could fall through to issuing
+	// a fresh code.
+	var resendErr error
+
+	err = service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {
+		existingOTP, err := txRepo.GetValidOTPForUpdate(ctx, user.ID, "signup_verify")
+		if err != nil {
+			if !errors.Is(err, repository.ErrNotFound) {
+				// A real failure. Falling through to issue a code here would
+				// mint a second live OTP while the first is still valid.
+				return err
+			}
+			// No active code on record; fall through and issue one below.
+		} else {
+			if time.Since(existingOTP.CreatedAt) < service.config.Verification.ResendCooldown {
+				resendErr = autherr.ErrOTPCooldown
+				return nil
+			}
+			// Invalidate the previous unconsumed verification code. On failure
+			// the transaction aborts, so the old code stays usable and no
+			// replacement is issued — the caller sees an error rather than two
+			// codes that both verify.
+			if err := txRepo.MarkOTPUsed(ctx, existingOTP.ID); err != nil {
+				return err
+			}
+		}
+
+		_, err = txRepo.CreateOTP(ctx, user.ID, newHash, "signup_verify", expiresAt)
+		return err
+	})
 	if err != nil {
 		return err
+	}
+	if resendErr != nil {
+		return resendErr
 	}
 
 	// 8. Dispatch verification code via transactional mailer
@@ -386,37 +421,50 @@ func (service *SignupService) AcceptInvite(
 		return nil, err
 	}
 
-	// 8. Create user account with verified email (inbox possession proven via invite token)
-	user, err := service.repo.CreateUser(ctx, invitation.Email, &hashedPassword)
-	if err != nil {
-		if errors.Is(err, repository.ErrAlreadyExists) {
-			return nil, autherr.ErrEmailAlreadyRegistered
+	// 8-10. Create user, profile, verify email, and mark invite accepted atomically
+	var user db.User
+	err = service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {
+		var txErr error
+		user, txErr = txRepo.CreateUser(ctx, invitation.Email, &hashedPassword)
+		if txErr != nil {
+			if errors.Is(txErr, repository.ErrAlreadyExists) {
+				return autherr.ErrEmailAlreadyRegistered
+			}
+			return txErr
 		}
-		return nil, err
-	}
-	_ = service.repo.MarkEmailVerified(ctx, user.ID)
+		if txErr = txRepo.MarkEmailVerified(ctx, user.ID); txErr != nil {
+			return txErr
+		}
 
-	// 9. Create user profile respecting configuration toggles
-	var firstName, lastName, username, displayName, avatarURL *string
-	if service.config.Profile.EnableName {
-		firstName = profileInput.FirstName
-		lastName = profileInput.LastName
-	}
-	if service.config.Profile.EnableUsername {
-		username = profileInput.Username
-	}
-	if service.config.Profile.EnableDisplayName {
-		displayName = profileInput.DisplayName
-	}
-	avatarURL = profileInput.AvatarURL
+		// Create user profile respecting configuration toggles
+		var firstName, lastName, username, displayName, avatarURL *string
+		if service.config.Profile.EnableName {
+			firstName = profileInput.FirstName
+			lastName = profileInput.LastName
+		}
+		if service.config.Profile.EnableUsername {
+			username = profileInput.Username
+		}
+		if service.config.Profile.EnableDisplayName {
+			displayName = profileInput.DisplayName
+		}
+		// Same avatar scheme check as the signup path, applied before the
+		// transaction opens so a rejected value costs no work.
+		if err := helpers.ValidateAvatarURL(profileInput.AvatarURL); err != nil {
+			return err
+		}
+		avatarURL = profileInput.AvatarURL
 
-	_, err = service.repo.CreateProfile(ctx, user.ID, firstName, lastName, username, displayName, nil, avatarURL)
+		if _, txErr = txRepo.CreateProfile(ctx, user.ID, firstName, lastName, username, displayName, nil, avatarURL); txErr != nil {
+			return txErr
+		}
+
+		// Mark invitation as accepted to prevent replay
+		return txRepo.MarkInvitationAccepted(ctx, invitation.ID)
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	// 10. Mark invitation as accepted to prevent replay
-	_ = service.repo.MarkInvitationAccepted(ctx, invitation.ID)
 
 	// 11. Issue active session token pair (access + refresh)
 	return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)

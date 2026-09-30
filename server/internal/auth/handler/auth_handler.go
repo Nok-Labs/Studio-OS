@@ -47,6 +47,9 @@ func (h *AuthHandler) Signup(c echo.Context) error {
 
 	tokens, err := h.svc.Signup.Signup(c.Request().Context(), req.Email, req.Password, profileInput)
 	if err != nil {
+		if errors.Is(err, autherr.ErrEmailAlreadyRegistered) || errors.Is(err, autherr.ErrUsernameTaken) {
+			return c.JSON(http.StatusAccepted, SignupResponse{Message: "If the details are valid, a verification code has been sent."})
+		}
 		return h.handleError(c, err)
 	}
 
@@ -364,8 +367,20 @@ func (h *AuthHandler) handleError(c echo.Context, err error) error {
 	case errors.Is(err, autherr.ErrAccountSuspended), errors.Is(err, autherr.ErrAccountDeactivated):
 		return c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
 
-	case errors.Is(err, autherr.ErrOTPCooldown):
+	case errors.Is(err, autherr.ErrOTPMaxAttempts), errors.Is(err, autherr.ErrOTPCooldown):
 		return c.JSON(http.StatusTooManyRequests, ErrorResponse{Error: err.Error()})
+
+	case errors.Is(err, autherr.ErrEmailNotVerified), errors.Is(err, autherr.ErrRefreshTokenReused),
+		errors.Is(err, autherr.ErrOTPNotFound), errors.Is(err, autherr.ErrInvitationNotFound),
+		errors.Is(err, autherr.ErrInvitationExpired), errors.Is(err, autherr.ErrInvitationAlreadyAccepted),
+		errors.Is(err, autherr.ErrOAuthAccount), errors.Is(err, autherr.ErrOAuthProviderNotSupported),
+		errors.Is(err, autherr.ErrOAuthTokenInvalid), errors.Is(err, autherr.ErrPasswordLoginDisabled),
+		errors.Is(err, autherr.ErrRegistrationDisabled):
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+
+	case errors.Is(err, autherr.ErrPasswordTooShort), errors.Is(err, autherr.ErrPasswordTooLong),
+		errors.Is(err, autherr.ErrPasswordSame), errors.Is(err, autherr.ErrInvalidAvatarURL):
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 
 	default:
 		// We could log unexpected errors here.

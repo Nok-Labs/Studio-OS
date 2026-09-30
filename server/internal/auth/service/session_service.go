@@ -11,6 +11,7 @@ import (
 	"server/internal/auth/repository"
 	"server/internal/auth/service/helpers"
 	"server/internal/auth/utils"
+	db "server/internal/db/generated"
 )
 
 // SessionService handles authentication, session renewal, token revocation, and OAuth logins.
@@ -76,6 +77,7 @@ func (service *SessionService) Login(ctx context.Context, email, password string
 
 	// 4. Reject accounts created via third-party OAuth providers that lack a password credential
 	if !user.PasswordHash.Valid {
+		utils.DummyPasswordCompare(password)
 		return nil, autherr.ErrOAuthAccount
 	}
 
@@ -138,7 +140,9 @@ func (service *SessionService) Refresh(ctx context.Context, rawRefreshToken stri
 
 	// 4. Theft detection: presenting an already-revoked token indicates token replay; nuke all sessions
 	if tokenRecord.RevokedAt != nil {
-		_ = service.repo.RevokeAllUserRefreshTokens(ctx, tokenRecord.UserID)
+		if err := service.repo.RevokeAllUserRefreshTokens(ctx, tokenRecord.UserID); err != nil {
+			return nil, err
+		}
 		return nil, autherr.ErrRefreshTokenReused
 	}
 
@@ -255,6 +259,8 @@ func (service *SessionService) OAuthLogin(ctx context.Context, providerName, idT
 		}
 		// Issue active session token pair
 		return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
 	}
 
 	// 4. Check if a user with this verified email already exists in the system
@@ -274,6 +280,8 @@ func (service *SessionService) OAuthLogin(ctx context.Context, providerName, idT
 		}
 		// Issue active session token pair
 		return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, existingUser.ID)
+	} else if !errors.Is(err, repository.ErrNotFound) {
+		return nil, err
 	}
 
 	// 5. New account provisioning: enforce registration policy
@@ -281,31 +289,38 @@ func (service *SessionService) OAuthLogin(ctx context.Context, providerName, idT
 		return nil, autherr.ErrRegistrationDisabled
 	}
 
-	// 6. Create user account with verified email (OAuth provider has already verified email ownership)
-	newUser, err := service.repo.CreateUser(ctx, normalizedEmail, nil)
-	if err != nil {
-		return nil, err
-	}
-	_ = service.repo.MarkEmailVerified(ctx, newUser.ID)
-
-	// 7. Populate profile attributes from OAuth identity according to config toggles
-	var firstName, lastName, avatarURL *string
-	if service.config.Profile.EnableName {
-		if identity.FirstName != "" {
-			firstName = &identity.FirstName
+	// 6-8. Create user, profile, and OAuth connection atomically
+	var newUser db.User
+	err = service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {
+		var txErr error
+		newUser, txErr = txRepo.CreateUser(ctx, normalizedEmail, nil)
+		if txErr != nil {
+			return txErr
 		}
-		if identity.LastName != "" {
-			lastName = &identity.LastName
+		if txErr = txRepo.MarkEmailVerified(ctx, newUser.ID); txErr != nil {
+			return txErr
 		}
-	}
-	if identity.AvatarURL != "" {
-		avatarURL = &identity.AvatarURL
-	}
 
-	_, _ = service.repo.CreateProfile(ctx, newUser.ID, firstName, lastName, nil, nil, nil, avatarURL)
+		var firstName, lastName, avatarURL *string
+		if service.config.Profile.EnableName {
+			if identity.FirstName != "" {
+				firstName = &identity.FirstName
+			}
+			if identity.LastName != "" {
+				lastName = &identity.LastName
+			}
+		}
+		if identity.AvatarURL != "" {
+			avatarURL = &identity.AvatarURL
+		}
 
-	// 8. Link the OAuth identity connection to the newly provisioned user
-	_, err = service.repo.CreateOAuthConnection(ctx, newUser.ID, providerName, identity.ProviderID)
+		if _, txErr = txRepo.CreateProfile(ctx, newUser.ID, firstName, lastName, nil, nil, nil, avatarURL); txErr != nil {
+			return txErr
+		}
+
+		_, txErr = txRepo.CreateOAuthConnection(ctx, newUser.ID, providerName, identity.ProviderID)
+		return txErr
+	})
 	if err != nil {
 		return nil, err
 	}

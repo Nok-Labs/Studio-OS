@@ -74,40 +74,56 @@ func (service *PasswordService) ForgotPassword(ctx context.Context, email string
 	}
 
 	// 5. Enforce cooldown to prevent spamming transactional email endpoints.
-	// ErrNotFound means there is nothing to invalidate; any other error is
-	// propagated so a transient database failure cannot cause a second reset
-	// code to be mailed out while the first is still live.
-	existingOTP, err := service.repo.GetValidOTP(ctx, user.ID, "password_reset")
-	switch {
-	case err == nil:
-		timeSinceCreation := time.Since(existingOTP.CreatedAt)
-		if timeSinceCreation < service.config.Verification.ResendCooldown {
-			return autherr.ErrOTPCooldown
-		}
-		// Invalidate the previous unconsumed OTP. On failure abort rather than
-		// issue a second live code for the same purpose.
-		if err := service.repo.MarkOTPUsed(ctx, existingOTP.ID); err != nil {
-			return err
-		}
-	case errors.Is(err, repository.ErrNotFound):
-		// No active code on record; fall through and issue a fresh one.
-	default:
-		return err
-	}
-
-	// 6. Generate CSPRNG 6-digit numeric code
+	// 5-7. Read the previous code, decide, and issue the replacement — atomically.
+	//
+	// The INSERT belongs inside the transaction for the same reason as in
+	// ResendOTP: marking the old code used and inserting its replacement are two
+	// statements, and splitting them across the transaction boundary lets two
+	// concurrent resends each insert a live code. Whoever holds the row lock
+	// must hold it through the insert.
+	//
+	// The code is generated before the transaction opens since it is pure
+	// computation, which keeps the lock window as short as possible.
 	newCode, err := utils.GenerateOTP()
 	if err != nil {
 		return err
 	}
-
-	// 7. Store SHA-256 hash of the OTP in the database
 	newHash := utils.HashToken(newCode)
 	expiresAt := time.Now().Add(service.config.Verification.OTPTTL)
 
-	_, err = service.repo.CreateOTP(ctx, user.ID, newHash, "password_reset", expiresAt)
+	// Captured rather than returned from fn so a cooldown rejection still lets
+	// the not-found branch fall through to issuing a fresh code.
+	var resendErr error
+
+	err = service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {
+		existingOTP, err := txRepo.GetValidOTPForUpdate(ctx, user.ID, "password_reset")
+		if err != nil {
+			if !errors.Is(err, repository.ErrNotFound) {
+				// A transient failure here must not fall through to issuing a
+				// code: that would put a second live reset OTP in circulation.
+				return err
+			}
+			// No active code on record; fall through and issue one below.
+		} else {
+			if time.Since(existingOTP.CreatedAt) < service.config.Verification.ResendCooldown {
+				resendErr = autherr.ErrOTPCooldown
+				return nil
+			}
+			// Invalidate the previous unconsumed OTP. On failure the transaction
+			// aborts, so the old code stays valid and no replacement is issued.
+			if err := txRepo.MarkOTPUsed(ctx, existingOTP.ID); err != nil {
+				return err
+			}
+		}
+
+		_, err = txRepo.CreateOTP(ctx, user.ID, newHash, "password_reset", expiresAt)
+		return err
+	})
 	if err != nil {
 		return err
+	}
+	if resendErr != nil {
+		return resendErr
 	}
 
 	// 8. Deliver the reset code to the user's inbox
@@ -292,7 +308,9 @@ func (service *PasswordService) ChangePassword(ctx context.Context, userID uuid.
 	}
 
 	// 8. Security: Revoke all existing sessions so previous refresh tokens cannot be used
-	_ = service.repo.RevokeAllUserRefreshTokens(ctx, userID)
+	if err := service.repo.RevokeAllUserRefreshTokens(ctx, userID); err != nil {
+		return err
+	}
 
 	return nil
 }

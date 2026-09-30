@@ -3,6 +3,8 @@ package helpers
 
 import (
 	"context"
+	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -10,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 
 	"server/internal/auth/config"
+	autherr "server/internal/auth/errors"
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
 	"server/internal/auth/utils"
@@ -62,6 +65,50 @@ func TextToPtr(text pgtype.Text) *string {
 		return nil
 	}
 	return &text.String
+}
+
+// ValidateAvatarURL rejects an avatar URL that is not a plain http(s) URL.
+//
+// The value is stored verbatim and later handed to a client to render, so an
+// unchecked string becomes an injection surface the moment any consumer treats
+// it as a URI rather than as opaque text. The schemes worth rejecting:
+//
+//   - javascript: executes in the page that renders it.
+//   - data: lets a caller supply arbitrary inline content, including markup,
+//     under a URL the server itself vouched for.
+//   - file: and other local schemes reach the client filesystem.
+//
+// An empty or absent URL is accepted, because "no avatar" is the common case
+// and is represented as NULL rather than as an empty string.
+//
+// This is validation, not sanitization. It checks the scheme and requires a
+// host, but deliberately does not fetch the URL to see where it resolves —
+// doing so would turn a profile update into a server-side request forgery
+// primitive. The stored value remains untrusted input; only its shape is
+// constrained here.
+func ValidateAvatarURL(raw *string) error {
+	if raw == nil || *raw == "" {
+		return nil
+	}
+
+	parsed, err := url.Parse(*raw)
+	if err != nil {
+		return fmt.Errorf("%w: %v", autherr.ErrInvalidAvatarURL, err)
+	}
+
+	switch strings.ToLower(parsed.Scheme) {
+	case "http", "https":
+	default:
+		return fmt.Errorf("%w: scheme %q is not allowed", autherr.ErrInvalidAvatarURL, parsed.Scheme)
+	}
+
+	// A scheme alone is not enough: "https:///path" parses cleanly and has no
+	// host to fetch from, so requiring one closes the gap.
+	if parsed.Host == "" {
+		return fmt.Errorf("%w: URL has no host", autherr.ErrInvalidAvatarURL)
+	}
+
+	return nil
 }
 
 // MapToUserProfile converts internal database records (db.User and db.Profile) into the public domain UserProfile representation.

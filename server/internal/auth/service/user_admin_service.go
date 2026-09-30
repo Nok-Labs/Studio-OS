@@ -64,12 +64,18 @@ func (service *UserAdminService) DeactivateUser(ctx context.Context, userID uuid
 // - Deletes profile record.
 // - Deletes user credentials from the database.
 func (service *UserAdminService) DeleteUser(ctx context.Context, userID uuid.UUID) error {
-	// 1. Revoke active refresh tokens
-	_ = service.repo.RevokeAllUserRefreshTokens(ctx, userID)
+	return service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {
+		// 1. Revoke active refresh tokens
+		if err := txRepo.RevokeAllUserRefreshTokens(ctx, userID); err != nil {
+			return err
+		}
 
-	// 2. Delete user profile record
-	_ = service.repo.DeleteProfile(ctx, userID)
+		// 2. Delete user profile record
+		if err := txRepo.DeleteProfile(ctx, userID); err != nil {
+			return err
+		}
 
-	// 3. Delete user account record
-	return service.repo.DeleteUser(ctx, userID)
+		// 3. Delete user account record
+		return txRepo.DeleteUser(ctx, userID)
+	})
 }

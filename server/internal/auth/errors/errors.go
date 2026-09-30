@@ -41,6 +41,10 @@ var (
 
 	// ErrPasswordSame is returned when trying to change password to the same password.
 	ErrPasswordSame = errors.New("new password cannot be the same as old password")
+
+	// ErrInvalidAvatarURL is returned when an avatar URL does not use the http
+	// or https scheme.
+	ErrInvalidAvatarURL = errors.New("avatar URL must be an http or https URL")
 )
 
 // Token errors

@@ -91,6 +91,13 @@ func (service *ProfileService) UpdateProfile(
 		}
 	}
 
+	// 1b. Reject an avatar URL that is not plain http(s), before it reaches the
+	// database. The value is stored verbatim and rendered by clients, so an
+	// unchecked scheme (javascript:, data:) is a stored-injection surface.
+	if err := helpers.ValidateAvatarURL(input.AvatarURL); err != nil {
+		return nil, err
+	}
+
 	// 2. Persist profile changes in database
 	profile, err := service.repo.UpdateProfile(
 		ctx,

@@ -12,14 +12,16 @@ import (
 type ResendMailer struct {
 	client      *resend.Client
 	fromAddress string
+	appBaseURL  string
 }
 
 // NewResendMailer constructs a Mailer that sends actual emails via Resend.
-func NewResendMailer(apiKey, fromAddress string) *ResendMailer {
+func NewResendMailer(apiKey, fromAddress, appBaseURL string) *ResendMailer {
 	client := resend.NewClient(apiKey)
 	return &ResendMailer{
 		client:      client,
 		fromAddress: fromAddress,
+		appBaseURL:  appBaseURL,
 	}
 }
 
@@ -43,8 +45,9 @@ func (m *ResendMailer) SendOTP(ctx context.Context, email, code string) error {
 
 // SendInvite sends an invitation link with a token to a new user.
 func (m *ResendMailer) SendInvite(ctx context.Context, email, token string) error {
-	// Typically this would point to a frontend route like /accept-invite?token=xxx
-	inviteURL := fmt.Sprintf("http://localhost:3000/accept-invite?token=%s", token)
+	// The token is placed in the URL fragment (#token=) so it is never sent to
+	// the server in the HTTP request or recorded in access logs/Referer headers.
+	inviteURL := fmt.Sprintf("%s/accept-invite#token=%s", m.appBaseURL, token)
 
 	params := &resend.SendEmailRequest{
 		From:    m.fromAddress,

@@ -146,5 +146,16 @@ jobs:
       - name: Build
         run: go build ./...
 
+      - name: Vulnerability scan
+        # govulncheck reports which vulnerabilities are actually reachable from
+        # this code, rather than listing every CVE present in the module graph.
+        # That distinction matters: the graph includes google.golang.org/api
+        # and golang.org/x/crypto, which carry advisories in code paths this
+        # service never calls, and an unfiltered scanner would train everyone
+        # to ignore the output.
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...
+
       - name: Test
         run: go test ./... -race -cover
