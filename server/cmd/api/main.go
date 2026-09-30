@@ -18,18 +18,18 @@ import (
 	"syscall"
 	"time"
 
-	"server/internal/auth/config"
+	authconfig "server/internal/auth/config"
 	authhandler "server/internal/auth/handler"
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
 	"server/internal/auth/service"
 	"server/internal/auth/utils"
+	"server/internal/config"
 	db "server/internal/db/generated"
 	"server/internal/httpserver"
 	"server/internal/mailer"
 
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
 )
 
 func main() {
@@ -37,33 +37,41 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	slog.SetDefault(logger)
 
-	// Load .env file if it exists (ignore error in production)
-	_ = godotenv.Load()
+	// 1. Configuration.
+	//
+	// Every environment-derived value is resolved and validated here, before
+	// anything is constructed. Load reports all problems at once and returns an
+	// error for anything missing or unsafe, so a misconfigured deploy dies at
+	// boot with an actionable message instead of half-starting.
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
+	// Bound connection setup so a black-holed database host fails fast rather
+	// than hanging the boot indefinitely.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// 1. Database Connection
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		slog.Warn("DATABASE_URL is not set, using default local postgres url")
-		dbURL = "postgres://postgres:postgres@localhost:5432/studio_db?sslmode=disable"
-	}
-
-	pool, err := pgxpool.New(ctx, dbURL)
+	// 2. Database Connection
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		slog.Error("Failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 	defer pool.Close()
 
+	// A lazy pool can start cleanly and only fail on the first real request, by
+	// which point the server is already accepting traffic. Ping now so an
+	// unreachable database is a boot failure.
 	if err := pool.Ping(ctx); err != nil {
 		slog.Error("Failed to ping database", "error", err)
 		os.Exit(1)
 	}
 	slog.Info("Connected to PostgreSQL")
 
-	// 2. Initialize Dependencies
+	// 3. Initialize Dependencies
 	queries := db.New(pool)
 
 	// Create the Auth Repository.
@@ -75,55 +83,42 @@ func main() {
 	// request, and the OTP brute-force attempt limit would never advance.
 	authRepo := repository.NewAuthRepository(queries, repository.WithTxSource(pool))
 
-	// Create JWT Issuer
-	jwtSecret := os.Getenv("JWT_SECRET")
-	if jwtSecret == "" {
-		slog.Warn("JWT_SECRET is not set, using a fallback secret (UNSAFE FOR PRODUCTION)")
-		jwtSecret = "super-secret-fallback-key"
-	}
-	jwtIssuer := utils.NewJWTIssuer(jwtSecret)
+	// Create JWT Issuer. cfg.JWTSecret is guaranteed non-empty and at least 32
+	// bytes by this point; there is deliberately no fallback value, because a
+	// known signing key lets an attacker mint a valid token for any user ID
+	// without touching the database.
+	jwtIssuer := utils.NewJWTIssuer(cfg.JWTSecret)
 
-	// Initialize Mailer
-	var mailService model.Mailer
-	resendKey := os.Getenv("RESEND_API_KEY")
-	resendFrom := os.Getenv("RESEND_FROM_ADDRESS")
-	if resendFrom == "" {
-		resendFrom = "onboarding@resend.dev"
-	}
-
-	if resendKey != "" {
-		mailService = mailer.NewResendMailer(resendKey, resendFrom)
-		slog.Info("Initialized Resend Mailer", "from", resendFrom)
-	} else {
-		slog.Warn("RESEND_API_KEY is missing, falling back to NoOpMailer (emails will only be logged)")
-		mailService = mailer.NewNoOpMailer()
-	}
+	// Initialize Mailer.
+	//
+	// RESEND_API_KEY is required, so the no-op mailer is unreachable in a
+	// configured deployment. That is deliberate: a no-op mailer accepts
+	// signups, logs the OTP to stdout and returns 201, so nobody receives a
+	// verification code and nothing in the response hints at why.
+	mailService := model.Mailer(mailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFromAddress))
+	slog.Info("Initialized Resend Mailer", "from", cfg.ResendFromAddress)
 
 	// Initialize Auth Config
-	authCfg := config.DefaultConfig()
+	authCfg := authconfig.DefaultConfig()
 	if err := authCfg.Validate(); err != nil {
 		slog.Error("Invalid auth configuration", "error", err)
 		os.Exit(1)
 	}
 
-	// 3. Initialize Services
+	// 4. Initialize Services
 	authServices := service.NewServices(authRepo, authCfg, jwtIssuer, mailService)
 
-	// 4. Initialize Handlers
+	// 5. Initialize Handlers
 	authHandler := authhandler.NewAuthHandler(authServices)
 	handlers := httpserver.Handlers{
 		Auth: authHandler,
 	}
 
-	// 5. Build HTTP Router
-	allowedOrigins := []string{"http://localhost:3000", "http://localhost:5173"}
-	router := httpserver.NewRouter(handlers, jwtIssuer, allowedOrigins)
+	// 6. Build HTTP Router
+	router := httpserver.NewRouter(handlers, jwtIssuer, cfg.AllowedOrigins, cfg.TrustedProxyCIDRs)
 
-	// 6. Start HTTP Server with Graceful Shutdown
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
+	// 7. Start HTTP Server with Graceful Shutdown
+	port := cfg.Port
 
 	// Timeouts are not tuning knobs, they are the only thing standing between
 	// this process and a Slowloris attack. Go's zero value means "no limit",
