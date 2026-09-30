@@ -184,36 +184,59 @@ func (service *SignupService) VerifyEmail(ctx context.Context, email, code strin
 		return nil, err
 	}
 
-	// 3. Fetch active OTP record with pessimistic row lock (SELECT FOR UPDATE) to defeat race conditions
-	otpRecord, err := service.repo.GetValidOTPForUpdate(ctx, user.ID, "signup_verify")
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return nil, autherr.ErrOTPNotFound
+	// 3-7. Read the OTP under a row lock, decide, and act — atomically.
+	//
+	// This must be one transaction. SELECT ... FOR UPDATE holds its lock only
+	// until the end of the enclosing transaction, so in autocommit mode the
+	// lock dies with the SELECT and concurrent requests all read attempts=0
+	// before any of them writes. The attempt limit would then only bind
+	// sequential guesses, letting parallel guesses bypass it entirely.
+	//
+	// The outcome is captured in a variable rather than returned from fn,
+	// because a wrong guess must still commit its attempt increment — returning
+	// the error from fn would roll that back and the counter would never move.
+	var verifyErr error
+
+	err = service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {
+		otpRecord, err := txRepo.GetValidOTPForUpdate(ctx, user.ID, "signup_verify")
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				verifyErr = autherr.ErrOTPNotFound
+				return nil
+			}
+			return err
 		}
+
+		// Enforce brute-force attempt limits
+		if otpRecord.Attempts >= int32(service.config.Verification.MaxOTPAttempts) {
+			verifyErr = autherr.ErrOTPMaxAttempts
+			return nil
+		}
+
+		// Verify submitted OTP hash against database record
+		if utils.HashToken(code) != otpRecord.CodeHash {
+			if _, err := txRepo.IncrementOTPAttempts(ctx, otpRecord.ID); err != nil {
+				return err
+			}
+			verifyErr = autherr.ErrOTPIncorrect
+			return nil
+		}
+
+		// Mark the OTP consumed so it cannot be replayed, and flip the user's
+		// verified flag. Both commit together or not at all.
+		if err := txRepo.MarkOTPUsed(ctx, otpRecord.ID); err != nil {
+			return err
+		}
+		if err := txRepo.MarkEmailVerified(ctx, user.ID); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
-
-	// 4. Enforce brute-force attempt limits
-	if otpRecord.Attempts >= int32(service.config.Verification.MaxOTPAttempts) {
-		return nil, autherr.ErrOTPMaxAttempts
-	}
-
-	// 5. Verify submitted OTP hash against database record
-	submittedHash := utils.HashToken(code)
-	if submittedHash != otpRecord.CodeHash {
-		// Increment failed attempt counter on mismatch
-		_, _ = service.repo.IncrementOTPAttempts(ctx, otpRecord.ID)
-		return nil, autherr.ErrOTPIncorrect
-	}
-
-	// 6. Mark OTP code as consumed so it cannot be reused
-	if err := service.repo.MarkOTPUsed(ctx, otpRecord.ID); err != nil {
-		return nil, err
-	}
-
-	// 7. Update user status to verified (email_verified_at = now())
-	if err := service.repo.MarkEmailVerified(ctx, user.ID); err != nil {
-		return nil, err
+	if verifyErr != nil {
+		return nil, verifyErr
 	}
 
 	// 8. Issue active session token pair (access token + refresh token)

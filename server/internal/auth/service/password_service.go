@@ -162,50 +162,79 @@ func (service *PasswordService) ResetPassword(ctx context.Context, email, code, 
 		return autherr.ErrAccountDeactivated
 	}
 
-	// 4. Lock active OTP row with row-lock to prevent concurrent verification races
-	otpRecord, err := service.repo.GetValidOTPForUpdate(ctx, user.ID, "password_reset")
-	if err != nil {
-		if errors.Is(err, repository.ErrNotFound) {
-			return autherr.ErrOTPNotFound
-		}
-		return err
-	}
-
-	// 5. Enforce brute-force attempt limits
-	if otpRecord.Attempts >= int32(service.config.Verification.MaxOTPAttempts) {
-		return autherr.ErrOTPMaxAttempts
-	}
-
-	// 6. Verify submitted OTP hash against database record
-	submittedHash := utils.HashToken(code)
-	if submittedHash != otpRecord.CodeHash {
-		_, _ = service.repo.IncrementOTPAttempts(ctx, otpRecord.ID)
-		return autherr.ErrOTPIncorrect
-	}
-
-	// 7. Hash new password with configured bcrypt cost
+	// 4. Hash the new password before opening the transaction. bcrypt at the
+	// configured cost takes ~260ms, and the transaction below holds a row lock
+	// that concurrent reset attempts block on. Hashing inside would make every
+	// competing request wait out our key-stretching.
 	hashedPassword, err := utils.HashPassword(newPassword, service.config.Password.BcryptCost)
 	if err != nil {
 		return err
 	}
 
-	// 8. Persist new password hash in database
-	if err := service.repo.UpdateUserPassword(ctx, user.ID, &hashedPassword); err != nil {
+	// 5-9. Lock the OTP row, decide, and apply the reset — atomically.
+	//
+	// The lock in GetValidOTPForUpdate is only held for the life of the
+	// enclosing transaction. Without one, concurrent requests all read the same
+	// attempt count before any of them increments it, so the brute-force limit
+	// binds sequential guesses only. On a password reset that is an account
+	// takeover vector, not just a rate-limit bypass.
+	//
+	// As in VerifyEmail, the outcome is captured in a variable instead of
+	// returned from fn: a wrong code must still commit its attempt increment,
+	// and returning an error from fn would roll it back.
+	var resetErr error
+
+	err = service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {
+		otpRecord, err := txRepo.GetValidOTPForUpdate(ctx, user.ID, "password_reset")
+		if err != nil {
+			if errors.Is(err, repository.ErrNotFound) {
+				resetErr = autherr.ErrOTPNotFound
+				return nil
+			}
+			return err
+		}
+
+		if otpRecord.Attempts >= int32(service.config.Verification.MaxOTPAttempts) {
+			resetErr = autherr.ErrOTPMaxAttempts
+			return nil
+		}
+
+		if utils.HashToken(code) != otpRecord.CodeHash {
+			if _, err := txRepo.IncrementOTPAttempts(ctx, otpRecord.ID); err != nil {
+				return err
+			}
+			resetErr = autherr.ErrOTPIncorrect
+			return nil
+		}
+
+		// The code is valid, so the reset proceeds. Persisting the new password
+		// without consuming the code would leave a live reset token sitting in
+		// the table — these steps belong in one transaction for that reason
+		// alone, independent of the locking above.
+		if err := txRepo.UpdateUserPassword(ctx, user.ID, &hashedPassword); err != nil {
+			return err
+		}
+		if err := txRepo.MarkOTPUsed(ctx, otpRecord.ID); err != nil {
+			return err
+		}
+
+		// Resetting via email OTP demonstrates inbox ownership; auto-verify.
+		if user.EmailVerifiedAt == nil {
+			if err := txRepo.MarkEmailVerified(ctx, user.ID); err != nil {
+				return err
+			}
+		}
+
+		// Invalidate every existing session across all devices.
+		if err := txRepo.RevokeAllUserRefreshTokens(ctx, user.ID); err != nil {
+			return err
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
-
-	// 9. Consume the OTP so it cannot be reused
-	_ = service.repo.MarkOTPUsed(ctx, otpRecord.ID)
-
-	// 10. Resetting password via email OTP demonstrates inbox ownership; auto-verify email
-	if user.EmailVerifiedAt == nil {
-		_ = service.repo.MarkEmailVerified(ctx, user.ID)
-	}
-
-	// 11. Security: Invalidate all existing sessions across all user devices
-	_ = service.repo.RevokeAllUserRefreshTokens(ctx, user.ID)
-
-	return nil
+	return resetErr
 }
 
 // ChangePassword updates an authenticated user's password using their current password.
