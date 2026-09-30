@@ -69,12 +69,20 @@ func TestDummyPasswordCompareDoesNotShortCircuit(t *testing.T) {
 		}
 	})
 
-	t.Run("dummy hash never verifies any password", func(t *testing.T) {
-		// Guards against someone replacing the constant with the hash of a
-		// guessable string, which would let an attacker authenticate.
-		for _, candidate := range []string{"", "password", "timing-equalizer-not-a-credential"} {
+	t.Run("dummy hash never verifies a guessable password", func(t *testing.T) {
+		// Guards against someone regenerating the constant with
+		// bcrypt.GenerateFromPassword on a guessable string, which would let
+		// an attacker satisfy the dummy comparison. The real plaintext is 32
+		// CSPRNG bytes, so none of these can match.
+		for _, candidate := range []string{
+			"",
+			"password",
+			"password123",
+			"timing-equalizer-not-a-credential",
+			"dummyHash",
+		} {
 			if bcrypt.CompareHashAndPassword([]byte(dummyHash), []byte(candidate)) == nil {
-				t.Fatalf("dummyHash must not verify the password %q", candidate)
+				t.Fatalf("dummyHash must not verify the guessable password %q", candidate)
 			}
 		}
 	})
@@ -109,11 +117,12 @@ func TestHashPassword(t *testing.T) {
 		}
 	})
 
-	t.Run("accepts the boundary costs", func(t *testing.T) {
-		for _, cost := range []int{bcrypt.MinCost, bcrypt.MaxCost} {
-			if _, err := HashPassword("password", cost); err != nil {
-				t.Fatalf("HashPassword(cost=%d) unexpected error: %v", cost, err)
-			}
+	t.Run("accepts the minimum cost", func(t *testing.T) {
+		// Only MinCost is exercised. bcrypt.MaxCost is 31, so actually
+		// hashing at it would run 2^31 rounds and never finish; the upper
+		// bound is covered by the out-of-range test above instead.
+		if _, err := HashPassword("password", bcrypt.MinCost); err != nil {
+			t.Fatalf("HashPassword(cost=%d) unexpected error: %v", bcrypt.MinCost, err)
 		}
 	})
 }

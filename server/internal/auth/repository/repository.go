@@ -18,6 +18,12 @@ import (
 )
 
 // AuthRepository defines the persistence contract for all authentication operations.
+//
+// WithTx runs a unit of work atomically. Operations that must not be split by a
+// concurrent request — OTP verification (which relies on SELECT ... FOR UPDATE
+// to serialise guesses), signup, invite redemption and account deletion — have
+// to go through it, because in autocommit mode a row lock is released the
+// instant its statement finishes and buys nothing.
 type AuthRepository interface {
 	// ===================================
 	// USER

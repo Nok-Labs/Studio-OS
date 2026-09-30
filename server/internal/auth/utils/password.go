@@ -6,22 +6,29 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// dummyHash is a genuine bcrypt hash (cost 12) of a random string that is not
-// a credential anyone can present. It is compared against on the "user not
-// found" login path so that a request costs the same whether or not the email
-// exists (requirement AUTH-17).
+// dummyHash is a genuine bcrypt hash (cost 12) of 32 bytes drawn from the
+// CSPRNG. The plaintext is never retained, so no password can be submitted
+// that matches it. It is compared against on the "user not found" login path
+// so a request costs the same whether or not the email exists (AUTH-17).
 //
-// It must be a real, parseable hash produced by bcrypt.GenerateFromPassword at
-// the same cost as PasswordConfig.BcryptCost. If it were malformed, Go's bcrypt
-// would return early from newFromHash and skip the expensive key schedule, and
-// the dummy comparison would return measurably faster than a real one — turning
-// this mitigation into a user-enumeration oracle. TestDummyPasswordCompareDoes
-// notShortCircuit in password_test.go guards that property.
+// It must be a real, parseable hash generated at the same cost as
+// PasswordConfig.BcryptCost. If it were malformed, Go's bcrypt would return
+// early from newFromHash and skip the expensive key schedule, making the dummy
+// comparison measurably faster than a real one and turning this mitigation
+// into a user-enumeration oracle. bcrypt validates only length, version and
+// cost — never the trailing base64 character — so a typo here would not be
+// caught at runtime. TestDummyPasswordCompareDoesNotShortCircuit guards it.
 //
-// Regenerate with:
+// To regenerate, hash 32 CSPRNG bytes whose plaintext is discarded, at the
+// same cost, and paste the result here:
 //
-//	go run ./scripts/gen_dummy_hash.go
-const dummyHash = "$2a$12$N9/ZAeDfgdzYgsk7oQQVlO92wyfWa0Xr.m78mafvKCW4lKY1SqGXm"
+//	secret := make([]byte, 32); rand.Read(secret)
+//	h, _ := bcrypt.GenerateFromPassword(secret, 12)
+//	fmt.Println(string(h))
+//
+// Never generate it from a guessable string: the hash is the decoy, and its
+// plaintext is what must be unrecoverable.
+const dummyHash = "$2a$12$Mm.kbQsUQBECC8vKsUDPVeIKGqq/s5xnRzpbWo8Su/9GJ7pJEMngm"
 
 // HashPassword hashes a password string using bcrypt with the specified cost factor.
 //
