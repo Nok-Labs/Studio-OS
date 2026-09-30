@@ -39,18 +39,18 @@ func NewSignupService(
 // Signup registers a new account using an email address and a plaintext password.
 //
 // Lifecycle & Verification behavior:
-// 1. Validates registration mode: if RegistrationConfig.Mode != RegistrationModeOpen or
-//    EnablePasswordRegistration is false, registration is rejected with ErrRegistrationDisabled.
-// 2. Validates password constraints (length between MinLength and 72 bytes).
-// 3. If ProfileConfig.EnableUsername is true, ensures the proposed username is not already claimed.
-// 4. Hashes the password with bcrypt using PasswordConfig.BcryptCost.
-// 5. Creates user record and associated profile with optional attributes (first name, last name, display name, avatar).
-// 6. Verification Branch:
-//    - If VerificationConfig.Required is true: generates a 6-digit OTP code, stores its SHA-256 hash
-//      with purpose "signup_verify", dispatches the email via Mailer.SendOTP, and returns (nil, nil)
-//      indicating the account is pending email verification.
-//    - If VerificationConfig.Required is false: marks the account verified immediately and returns
-//      an active TokenPair (access token + refresh token).
+//  1. Validates registration mode: if RegistrationConfig.Mode != RegistrationModeOpen or
+//     EnablePasswordRegistration is false, registration is rejected with ErrRegistrationDisabled.
+//  2. Validates password constraints (length between MinLength and 72 bytes).
+//  3. If ProfileConfig.EnableUsername is true, ensures the proposed username is not already claimed.
+//  4. Hashes the password with bcrypt using PasswordConfig.BcryptCost.
+//  5. Creates user record and associated profile with optional attributes (first name, last name, display name, avatar).
+//  6. Verification Branch:
+//     - If VerificationConfig.Required is true: generates a 6-digit OTP code, stores its SHA-256 hash
+//     with purpose "signup_verify", dispatches the email via Mailer.SendOTP, and returns (nil, nil)
+//     indicating the account is pending email verification.
+//     - If VerificationConfig.Required is false: marks the account verified immediately and returns
+//     an active TokenPair (access token + refresh token).
 //
 // Returns:
 // - (*model.TokenPair, nil): User created and immediately active (when verification is disabled).
@@ -159,12 +159,12 @@ func (service *SignupService) Signup(
 // VerifyEmail validates a pending signup verification code and activates the user account.
 //
 // Security guarantees:
-// - Uses a pessimistic database row-lock (SELECT FOR UPDATE) on the OTP record to prevent
-//   race conditions and simultaneous brute-force verification requests.
-// - Enforces VerificationConfig.MaxOTPAttempts threshold.
-// - Compares SHA-256 hashes of submitted code and database record.
-// - Upon success, consumes the OTP record, marks the user's email as verified, and issues
-//   an active access/refresh token pair.
+//   - Uses a pessimistic database row-lock (SELECT FOR UPDATE) on the OTP record to prevent
+//     race conditions and simultaneous brute-force verification requests.
+//   - Enforces VerificationConfig.MaxOTPAttempts threshold.
+//   - Compares SHA-256 hashes of submitted code and database record.
+//   - Upon success, consumes the OTP record, marks the user's email as verified, and issues
+//     an active access/refresh token pair.
 //
 // Returns:
 // - (*model.TokenPair, nil): Verification successful; active session tokens issued.
@@ -246,10 +246,10 @@ func (service *SignupService) VerifyEmail(ctx context.Context, email, code strin
 // ResendOTP generates and dispatches a fresh verification code subject to cooldown limits.
 //
 // Security & Anti-Enumeration:
-// - Returns nil without error if the email address does not exist or is already verified,
-//   mitigating account enumeration attacks.
-// - Enforces VerificationConfig.ResendCooldown to prevent inbox flooding.
-// - Invalidates any previous unconsumed signup verification code before generating a new one.
+//   - Returns nil without error if the email address does not exist or is already verified,
+//     mitigating account enumeration attacks.
+//   - Enforces VerificationConfig.ResendCooldown to prevent inbox flooding.
+//   - Invalidates any previous unconsumed signup verification code before generating a new one.
 //
 // Returns:
 // - nil: OTP generated and sent, or email not eligible for resend (anti-enumeration).

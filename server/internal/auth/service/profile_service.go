@@ -64,6 +64,7 @@ func (service *ProfileService) GetProfile(ctx context.Context, userID uuid.UUID)
 //   - Checks whether the proposed username is already taken by another user.
 //   - If taken, allows the update only if it already belongs to the current user.
 //   - If claimed by another user, returns ErrUsernameTaken.
+//
 // - Persists non-nil profile updates in the database.
 //
 // Returns:

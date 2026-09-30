@@ -36,15 +36,15 @@ func NewSessionService(
 // Login authenticates a user using their email and plaintext password.
 //
 // Security guarantees:
-// - Verifies PasswordConfig.EnablePasswordLogin is true.
-// - Side-Channel Mitigation (AUTH-17): If the user does not exist in the database,
-//   the service executes a dummy bcrypt comparison (DummyPasswordCompare) against a precomputed
-//   hash so that the server's response time is identical for valid and invalid emails.
-// - Rejects OAuth-only accounts that do not have a password set with ErrOAuthAccount.
-// - Enforces suspension (ErrAccountSuspended) and deactivation (ErrAccountDeactivated).
-// - Verification Gate: If VerificationConfig.Required is true, blocks unverified accounts
-//   with ErrEmailNotVerified.
-// - Returns an active TokenPair (access token + refresh token) on successful authentication.
+//   - Verifies PasswordConfig.EnablePasswordLogin is true.
+//   - Side-Channel Mitigation (AUTH-17): If the user does not exist in the database,
+//     the service executes a dummy bcrypt comparison (DummyPasswordCompare) against a precomputed
+//     hash so that the server's response time is identical for valid and invalid emails.
+//   - Rejects OAuth-only accounts that do not have a password set with ErrOAuthAccount.
+//   - Enforces suspension (ErrAccountSuspended) and deactivation (ErrAccountDeactivated).
+//   - Verification Gate: If VerificationConfig.Required is true, blocks unverified accounts
+//     with ErrEmailNotVerified.
+//   - Returns an active TokenPair (access token + refresh token) on successful authentication.
 //
 // Returns:
 // - (*model.TokenPair, nil): Credentials valid and account active.
@@ -104,14 +104,14 @@ func (service *SessionService) Login(ctx context.Context, email, password string
 // Refresh validates an existing refresh token and issues a fresh session pair.
 //
 // Security guarantees:
-// - Token Expiration: Verifies current time does not exceed the token's expires_at.
-// - Replay / Theft Detection (AUTH-15): If a revoked token (revoked_at IS NOT NULL) is presented,
-//   the service treats this as a session hijacking event and IMMEDIATELY revokes ALL active
-//   refresh tokens for that user across all devices (RevokeAllUserRefreshTokens), returning
-//   ErrRefreshTokenReused.
-// - Enforces user status: rejects requests if account was suspended or deactivated since token issuance.
-// - Rotation (AUTH-14): If SessionConfig.RotateRefreshToken is enabled, marks the presented refresh
-//   token as revoked and issues a brand-new token pair. If disabled, re-issues the access token only.
+//   - Token Expiration: Verifies current time does not exceed the token's expires_at.
+//   - Replay / Theft Detection (AUTH-15): If a revoked token (revoked_at IS NOT NULL) is presented,
+//     the service treats this as a session hijacking event and IMMEDIATELY revokes ALL active
+//     refresh tokens for that user across all devices (RevokeAllUserRefreshTokens), returning
+//     ErrRefreshTokenReused.
+//   - Enforces user status: rejects requests if account was suspended or deactivated since token issuance.
+//   - Rotation (AUTH-14): If SessionConfig.RotateRefreshToken is enabled, marks the presented refresh
+//     token as revoked and issues a brand-new token pair. If disabled, re-issues the access token only.
 //
 // Returns:
 // - (*model.TokenPair, nil): Session refreshed successfully.
@@ -203,15 +203,15 @@ func (service *SessionService) Logout(ctx context.Context, rawRefreshToken strin
 // OAuthLogin handles authentication via an external identity provider (e.g. Google).
 //
 // Lifecycle & Provisioning behavior:
-// 1. Verifies that OAuth is globally enabled and the requested provider is registered.
-// 2. Validates the incoming ID token with the provider, obtaining a verified Identity.
-// 3. Existing Connection: If an oauth_connections row already matches (provider, provider_user_id),
-//    the linked user is validated (suspended/deactivated checks) and active session tokens are issued.
-// 4. Account Linking: If no connection exists but a user account with the verified email is found,
-//    the OAuth connection is linked to that existing account and active session tokens are issued.
-// 5. Just-In-Time Provisioning: If no user exists, verifies registration policy (open mode + OAuth enabled),
-//    creates a new user with verified email (inbox ownership proven by OAuth provider), creates a profile
-//    with available identity data (name, avatar), links the provider connection, and issues session tokens.
+//  1. Verifies that OAuth is globally enabled and the requested provider is registered.
+//  2. Validates the incoming ID token with the provider, obtaining a verified Identity.
+//  3. Existing Connection: If an oauth_connections row already matches (provider, provider_user_id),
+//     the linked user is validated (suspended/deactivated checks) and active session tokens are issued.
+//  4. Account Linking: If no connection exists but a user account with the verified email is found,
+//     the OAuth connection is linked to that existing account and active session tokens are issued.
+//  5. Just-In-Time Provisioning: If no user exists, verifies registration policy (open mode + OAuth enabled),
+//     creates a new user with verified email (inbox ownership proven by OAuth provider), creates a profile
+//     with available identity data (name, avatar), links the provider connection, and issues session tokens.
 //
 // Returns:
 // - (*model.TokenPair, nil): Authenticated successfully.

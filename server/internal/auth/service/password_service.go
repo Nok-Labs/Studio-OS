@@ -121,12 +121,12 @@ func (service *PasswordService) ForgotPassword(ctx context.Context, email string
 // ResetPassword consumes a password reset OTP and assigns a new password to the user.
 //
 // Security guarantees:
-// - Enforces password length policy (min length up to 72 bytes).
-// - Acquires a pessimistic row-level lock (SELECT FOR UPDATE) on the OTP record to prevent
-//   concurrent race conditions or duplicate submissions.
-// - Enforces maximum attempt thresholds (VerificationConfig.MaxOTPAttempts) to defend against brute force.
-// - Successfully resetting password automatically verifies the email address (possession of inbox proven).
-// - Revokes ALL active refresh tokens across all devices to immediately expel unauthorized sessions.
+//   - Enforces password length policy (min length up to 72 bytes).
+//   - Acquires a pessimistic row-level lock (SELECT FOR UPDATE) on the OTP record to prevent
+//     concurrent race conditions or duplicate submissions.
+//   - Enforces maximum attempt thresholds (VerificationConfig.MaxOTPAttempts) to defend against brute force.
+//   - Successfully resetting password automatically verifies the email address (possession of inbox proven).
+//   - Revokes ALL active refresh tokens across all devices to immediately expel unauthorized sessions.
 //
 // Returns:
 // - ErrPasswordTooShort / ErrPasswordTooLong if newPassword violates length constraints.

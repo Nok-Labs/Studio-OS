@@ -65,9 +65,15 @@ func main() {
 
 	// 2. Initialize Dependencies
 	queries := db.New(pool)
-	
-	// Create the Auth Repository
-	authRepo := repository.NewAuthRepository(queries)
+
+	// Create the Auth Repository.
+	//
+	// WithTxSource is not optional. Without it the repository has no
+	// transaction source and WithTx returns ErrTransactionsUnsupported, which
+	// takes down every caller that needs atomicity — currently OTP
+	// verification and password reset. Both would answer 500 on every
+	// request, and the OTP brute-force attempt limit would never advance.
+	authRepo := repository.NewAuthRepository(queries, repository.WithTxSource(pool))
 
 	// Create JWT Issuer
 	jwtSecret := os.Getenv("JWT_SECRET")
@@ -119,9 +125,21 @@ func main() {
 		port = "8080"
 	}
 
+	// Timeouts are not tuning knobs, they are the only thing standing between
+	// this process and a Slowloris attack. Go's zero value means "no limit",
+	// so omitting them lets a handful of connections that dribble one byte of
+	// headers per minute hold every accept-loop slot forever — the Recover
+	// middleware never engages because no request ever completes.
+	//
+	// ReadHeaderTimeout is the one that matters most; the rest are defense in
+	// depth against slow bodies and slow readers.
 	srv := &http.Server{
-		Addr:    ":" + port,
-		Handler: router,
+		Addr:              ":" + port,
+		Handler:           router,
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       20 * time.Second,
+		WriteTimeout:      20 * time.Second,
+		IdleTimeout:       60 * time.Second,
 	}
 
 	go func() {

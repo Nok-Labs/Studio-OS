@@ -39,9 +39,9 @@ type VerificationConfig struct {
 
 // SessionConfig controls JWT and refresh token lifetimes.
 type SessionConfig struct {
-	AccessTokenTTL      time.Duration // short-lived access token TTL (e.g., 15m)
-	RefreshTokenTTL     time.Duration // long-lived refresh token TTL (e.g., 30d)
-	RotateRefreshToken  bool          // true = issue fresh refresh token on every /refresh
+	AccessTokenTTL     time.Duration // short-lived access token TTL (e.g., 15m)
+	RefreshTokenTTL    time.Duration // long-lived refresh token TTL (e.g., 30d)
+	RotateRefreshToken bool          // true = issue fresh refresh token on every /refresh
 }
 
 // PasswordConfig controls password requirements and security parameters.
@@ -60,8 +60,8 @@ type ProfileConfig struct {
 
 // OAuthConfig registers supported OAuth providers.
 type OAuthConfig struct {
-	Enabled   bool                             // master toggle for all OAuth sign-ins
-	Providers map[string]oauth.Provider        // keyed by provider name, e.g. "google"
+	Enabled   bool                      // master toggle for all OAuth sign-ins
+	Providers map[string]oauth.Provider // keyed by provider name, e.g. "google"
 }
 
 // AuthConfig aggregates all configuration sub-sections.

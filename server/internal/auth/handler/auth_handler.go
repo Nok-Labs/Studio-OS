@@ -310,7 +310,7 @@ func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	}
 
 	userID := GetUserID(c)
-	
+
 	// Convert DTO to model
 	input := model.ProfileInput{
 		FirstName:   req.FirstName,
@@ -355,18 +355,18 @@ func (h *AuthHandler) handleError(c echo.Context, err error) error {
 	switch {
 	case errors.Is(err, autherr.ErrEmailAlreadyRegistered), errors.Is(err, autherr.ErrUsernameTaken):
 		return c.JSON(http.StatusConflict, ErrorResponse{Error: err.Error()})
-	
-	case errors.Is(err, autherr.ErrInvalidCredentials), errors.Is(err, autherr.ErrOTPIncorrect), 
-		 errors.Is(err, autherr.ErrOTPExpired), errors.Is(err, autherr.ErrRefreshTokenInvalid),
-		 errors.Is(err, utils.ErrInvalidToken):
+
+	case errors.Is(err, autherr.ErrInvalidCredentials), errors.Is(err, autherr.ErrOTPIncorrect),
+		errors.Is(err, autherr.ErrOTPExpired), errors.Is(err, autherr.ErrRefreshTokenInvalid),
+		errors.Is(err, utils.ErrInvalidToken):
 		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
-	
+
 	case errors.Is(err, autherr.ErrAccountSuspended), errors.Is(err, autherr.ErrAccountDeactivated):
 		return c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
-	
+
 	case errors.Is(err, autherr.ErrOTPCooldown):
 		return c.JSON(http.StatusTooManyRequests, ErrorResponse{Error: err.Error()})
-		
+
 	default:
 		// We could log unexpected errors here.
 		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
