@@ -1,0 +1,112 @@
+name: Deploy dev backend
+
+# Deliberately manual and deliberately develop-only.
+#
+# CI (ci.yml) runs on every push. This never runs on its own: deploying the
+# shared backend to frontend developers is an act someone chose, not a side
+# effect of pushing a branch. `ref: develop` below is fixed regardless of
+# which branch the Run button was clicked from, so a stray dispatch from a
+# feature branch still ships develop.
+on:
+  workflow_dispatch:
+
+# One deployment at a time, and never cancel one that is already running —
+# an interrupted push can leave the Space building a half-written tree.
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Migrate, then deploy develop
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out develop
+        uses: actions/checkout@v4
+        with:
+          ref: develop
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      # Migrations run before the deploy, not after, so the new code never
+      # starts against a schema that is missing what it reads. goose records
+      # what it has already applied, so this is additive: a re-run is a no-op,
+      # and nothing is ever dropped or re-seeded.
+      #
+      # Flags rather than the GOOSE_* environment variables, because a
+      # migration that silently skipped would be the worst possible outcome
+      # here — the deploy would still look green.
+      - name: Run migrations
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::DATABASE_URL secret is not set — refusing to deploy without it"
+            exit 1
+          fi
+          go install github.com/pressly/goose/v3/cmd/goose@latest
+          goose -dir server/migrations -driver postgres -dbstring "$DATABASE_URL" up
+
+      # The Space is a Docker Space, so its repo is the build context: a
+      # Dockerfile plus whatever the build needs. Assembled here rather than
+      # pushed from server/ directly, so .env, tests and the sqlc/Makefile
+      # tooling never travel to a public Space.
+      - name: Assemble the Space
+        run: |
+          mkdir -p space
+          cp -r server/go.mod server/go.sum server/cmd server/internal \
+                server/docs server/migrations space/
+          cp server/Dockerfile space/Dockerfile
+
+          # app_port is the only field this adds; everything else reproduces
+          # the Space's existing card data so a deploy does not quietly strip
+          # the license or the title the Space was created with. This block
+          # replaces README.md outright, so a field left out here is lost.
+          cat > space/README.md <<'YAML'
+          ---
+          title: Studioos
+          emoji: "\U0001F3C6"
+          colorFrom: red
+          colorTo: indigo
+          sdk: docker
+          pinned: false
+          license: mit
+          app_port: 8080
+          ---
+          YAML
+
+          echo "Space contents:"
+          find space -maxdepth 1 -mindepth 1 | sort
+
+      # Pushing to the Space repo is what starts a rebuild — there is no
+      # separate "deploy" call. The token needs write access to the Space.
+      - name: Push to the Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE: ${{ secrets.HF_SPACE }}
+        run: |
+          if [ -z "$HF_TOKEN" ] || [ -z "$HF_SPACE" ]; then
+            echo "::error::HF_TOKEN and HF_SPACE secrets are required"
+            exit 1
+          fi
+
+          cd space
+          git init -q
+          git add -A
+          git -c user.name="deploy-dev" -c user.email="deploy@localhost" \
+            commit -q -m "deploy: ${GITHUB_SHA} from develop"
+
+          git push --force \
+            "https://hf:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" \
+            HEAD:main
+
+          echo "Pushed. The Space rebuild takes a few minutes; check its"
+          echo "logs tab, then GET /health on the Space URL."
