@@ -4,6 +4,7 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"strings"
 	"time"
@@ -52,6 +53,15 @@ func IssueTokenPair(
 		AccessToken:  accessToken,
 		RefreshToken: rawRefreshToken,
 	}, nil
+}
+
+// ValidateEmail ensures the provided string is structurally a valid email address.
+func ValidateEmail(email string) error {
+	_, err := mail.ParseAddress(email)
+	if err != nil {
+		return autherr.ErrInvalidEmail
+	}
+	return nil
 }
 
 // NormalizeEmail canonicalizes an email string by converting it to lowercase and stripping leading/trailing whitespace.

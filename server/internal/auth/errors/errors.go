@@ -5,6 +5,9 @@ import "errors"
 
 // Credential and account status errors
 var (
+	// ErrInvalidEmail is returned when an email is structurally malformed.
+	ErrInvalidEmail = errors.New("invalid email address format")
+
 	// ErrInvalidCredentials is deliberately identical for "no such email" and "wrong password"
 	// to prevent user enumeration attacks.
 	ErrInvalidCredentials = errors.New("invalid email or password")

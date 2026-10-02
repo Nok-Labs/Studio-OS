@@ -7,6 +7,7 @@ import (
 	autherr "server/internal/auth/errors"
 	"server/internal/auth/model"
 	"server/internal/auth/service"
+	"server/internal/auth/service/helpers"
 	"server/internal/auth/utils"
 
 	"github.com/labstack/echo/v4"
@@ -38,6 +39,10 @@ func (h *AuthHandler) Signup(c echo.Context) error {
 	var req SignupRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid body"})
+	}
+
+	if err := helpers.ValidateEmail(req.Email); err != nil {
+		return h.handleError(c, err)
 	}
 
 	profileInput := model.ProfileInput{}
@@ -83,6 +88,10 @@ func (h *AuthHandler) Verify(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid body"})
 	}
 
+	if err := helpers.ValidateEmail(req.Email); err != nil {
+		return h.handleError(c, err)
+	}
+
 	tokens, err := h.svc.Signup.VerifyEmail(c.Request().Context(), req.Email, req.Code)
 	if err != nil {
 		return h.handleError(c, err)
@@ -111,6 +120,10 @@ func (h *AuthHandler) ResendOTP(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid body"})
 	}
 
+	if err := helpers.ValidateEmail(req.Email); err != nil {
+		return h.handleError(c, err)
+	}
+
 	err := h.svc.Signup.ResendOTP(c.Request().Context(), req.Email)
 	if err != nil {
 		return h.handleError(c, err)
@@ -134,6 +147,11 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	var req LoginRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid body"})
+	}
+
+	if err := helpers.ValidateEmail(req.Email); err != nil {
+		// Do not return ErrInvalidEmail directly to avoid enumeration, use InvalidCredentials
+		return h.handleError(c, autherr.ErrInvalidCredentials)
 	}
 
 	tokens, err := h.svc.Session.Login(c.Request().Context(), req.Email, req.Password)
@@ -215,6 +233,11 @@ func (h *AuthHandler) ForgotPassword(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid body"})
 	}
 
+	if err := helpers.ValidateEmail(req.Email); err != nil {
+		// Do not leak whether the email is invalid vs not found
+		return c.JSON(http.StatusOK, map[string]string{"message": "if the email exists, a reset code was sent"})
+	}
+
 	err := h.svc.Password.ForgotPassword(c.Request().Context(), req.Email)
 	if err != nil {
 		return h.handleError(c, err)
@@ -238,6 +261,10 @@ func (h *AuthHandler) ResetPassword(c echo.Context) error {
 	var req ResetPasswordRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: "invalid body"})
+	}
+
+	if err := helpers.ValidateEmail(req.Email); err != nil {
+		return h.handleError(c, err)
 	}
 
 	err := h.svc.Password.ResetPassword(c.Request().Context(), req.Email, req.Code, req.NewPassword)
@@ -353,41 +380,6 @@ func (h *AuthHandler) CheckUsername(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]bool{"available": available})
 }
 
-// handleError maps domain errors to standard HTTP status codes.
-func (h *AuthHandler) handleError(c echo.Context, err error) error {
-	switch {
-	case errors.Is(err, autherr.ErrEmailAlreadyRegistered), errors.Is(err, autherr.ErrUsernameTaken):
-		return c.JSON(http.StatusConflict, ErrorResponse{Error: err.Error()})
-
-	case errors.Is(err, autherr.ErrInvalidCredentials), errors.Is(err, autherr.ErrOTPIncorrect),
-		errors.Is(err, autherr.ErrOTPExpired), errors.Is(err, autherr.ErrRefreshTokenInvalid),
-		errors.Is(err, utils.ErrInvalidToken):
-		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
-
-	case errors.Is(err, autherr.ErrAccountSuspended), errors.Is(err, autherr.ErrAccountDeactivated):
-		return c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
-
-	case errors.Is(err, autherr.ErrOTPMaxAttempts), errors.Is(err, autherr.ErrOTPCooldown):
-		return c.JSON(http.StatusTooManyRequests, ErrorResponse{Error: err.Error()})
-
-	case errors.Is(err, autherr.ErrEmailNotVerified), errors.Is(err, autherr.ErrRefreshTokenReused),
-		errors.Is(err, autherr.ErrOTPNotFound), errors.Is(err, autherr.ErrInvitationNotFound),
-		errors.Is(err, autherr.ErrInvitationExpired), errors.Is(err, autherr.ErrInvitationAlreadyAccepted),
-		errors.Is(err, autherr.ErrOAuthAccount), errors.Is(err, autherr.ErrOAuthProviderNotSupported),
-		errors.Is(err, autherr.ErrOAuthTokenInvalid), errors.Is(err, autherr.ErrPasswordLoginDisabled),
-		errors.Is(err, autherr.ErrRegistrationDisabled):
-		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
-
-	case errors.Is(err, autherr.ErrPasswordTooShort), errors.Is(err, autherr.ErrPasswordTooLong),
-		errors.Is(err, autherr.ErrPasswordSame), errors.Is(err, autherr.ErrInvalidAvatarURL):
-		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
-
-	default:
-		// We could log unexpected errors here.
-		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
-	}
-}
-
 // DeleteProfile godoc
 // @Summary      Delete profile
 // @Description  Allows a user to permanently delete their own account.
@@ -437,4 +429,40 @@ func (h *AuthHandler) AcceptInvite(c echo.Context) error {
 		AccessToken:  tokens.AccessToken,
 		RefreshToken: tokens.RefreshToken,
 	})
+}
+
+// handleError maps domain errors to standard HTTP status codes.
+func (h *AuthHandler) handleError(c echo.Context, err error) error {
+	switch {
+	case errors.Is(err, autherr.ErrEmailAlreadyRegistered), errors.Is(err, autherr.ErrUsernameTaken):
+		return c.JSON(http.StatusConflict, ErrorResponse{Error: err.Error()})
+
+	case errors.Is(err, autherr.ErrInvalidCredentials), errors.Is(err, autherr.ErrOTPIncorrect),
+		errors.Is(err, autherr.ErrOTPExpired), errors.Is(err, autherr.ErrRefreshTokenInvalid),
+		errors.Is(err, utils.ErrInvalidToken):
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+
+	case errors.Is(err, autherr.ErrAccountSuspended), errors.Is(err, autherr.ErrAccountDeactivated):
+		return c.JSON(http.StatusForbidden, ErrorResponse{Error: err.Error()})
+
+	case errors.Is(err, autherr.ErrOTPMaxAttempts), errors.Is(err, autherr.ErrOTPCooldown):
+		return c.JSON(http.StatusTooManyRequests, ErrorResponse{Error: err.Error()})
+
+	case errors.Is(err, autherr.ErrEmailNotVerified), errors.Is(err, autherr.ErrRefreshTokenReused),
+		errors.Is(err, autherr.ErrOTPNotFound), errors.Is(err, autherr.ErrInvitationNotFound),
+		errors.Is(err, autherr.ErrInvitationExpired), errors.Is(err, autherr.ErrInvitationAlreadyAccepted),
+		errors.Is(err, autherr.ErrOAuthAccount), errors.Is(err, autherr.ErrOAuthProviderNotSupported),
+		errors.Is(err, autherr.ErrOAuthTokenInvalid), errors.Is(err, autherr.ErrPasswordLoginDisabled),
+		errors.Is(err, autherr.ErrRegistrationDisabled):
+		return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: err.Error()})
+
+	case errors.Is(err, autherr.ErrPasswordTooShort), errors.Is(err, autherr.ErrPasswordTooLong),
+		errors.Is(err, autherr.ErrPasswordSame), errors.Is(err, autherr.ErrInvalidAvatarURL),
+		errors.Is(err, autherr.ErrInvalidEmail):
+		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
+
+	default:
+		// We could log unexpected errors here.
+		return c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "internal server error"})
+	}
 }
