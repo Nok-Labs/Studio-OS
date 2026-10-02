@@ -16,7 +16,7 @@ part 'dio_client.g.dart';
 @Riverpod(keepAlive: true)
 Dio dio(Ref ref) {
   final storage = ref.watch(secureStorageProvider);
-  
+
   //===================================
   // BASE CONFIGURATION
   //===================================
