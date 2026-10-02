@@ -29,7 +29,8 @@ func clearEnv(t *testing.T) {
 	for _, k := range []string{
 		"PORT", "DATABASE_URL", "JWT_SECRET", "RESEND_API_KEY",
 		"RESEND_FROM_ADDRESS", "CORS_ALLOWED_ORIGINS", "TRUSTED_PROXY_CIDRS",
-		"APP_BASE_URL", "GOOGLE_CLIENT_ID",
+		"APP_BASE_URL", "GOOGLE_CLIENT_ID", "RATE_LIMIT_PER_MINUTE",
+		"SMTP_HOST", "SMTP_PORT", "SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM",
 	} {
 		t.Setenv(k, "")
 	}
@@ -255,5 +256,111 @@ func TestLoadTrimsTrailingSlashFromAppBaseURL(t *testing.T) {
 	}
 	if cfg.AppBaseURL != "https://app.studio.example" {
 		t.Fatalf("AppBaseURL = %q, want the trailing slash removed", cfg.AppBaseURL)
+	}
+}
+
+func TestLoadDefaultsTheRateLimit(t *testing.T) {
+	clearEnv(t)
+	setEnv(t, validEnv())
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	if cfg.AuthRateLimitPerMinute != 5 {
+		t.Fatalf("AuthRateLimitPerMinute = %d, want the default 5", cfg.AuthRateLimitPerMinute)
+	}
+}
+
+func TestLoadReadsTheRateLimitFromTheEnvironment(t *testing.T) {
+	clearEnv(t)
+	env := validEnv()
+	env["RATE_LIMIT_PER_MINUTE"] = "60"
+	setEnv(t, env)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	if cfg.AuthRateLimitPerMinute != 60 {
+		t.Fatalf("AuthRateLimitPerMinute = %d, want 60", cfg.AuthRateLimitPerMinute)
+	}
+}
+
+func TestLoadFallsBackWhenTheRateLimitIsUnusable(t *testing.T) {
+	// Zero would not mean "unlimited" — it means every auth request is
+	// rejected, so a blank or mistyped value must not be able to reach the
+	// limiter.
+	for _, raw := range []string{"", "0", "-1", "lots"} {
+		clearEnv(t)
+		env := validEnv()
+		env["RATE_LIMIT_PER_MINUTE"] = raw
+		setEnv(t, env)
+
+		cfg, err := Load()
+		if err != nil {
+			t.Fatalf("Load() with %q = %v, want nil", raw, err)
+		}
+		if cfg.AuthRateLimitPerMinute != 5 {
+			t.Errorf("AuthRateLimitPerMinute = %q, want the default 5", raw)
+		}
+	}
+}
+
+func TestLoadReadsSMTPSettingsAndDefaultsThePort(t *testing.T) {
+	clearEnv(t)
+	env := validEnv()
+	env["SMTP_HOST"] = "smtp.gmail.com"
+	env["SMTP_USERNAME"] = "me@gmail.com"
+	env["SMTP_PASSWORD"] = "abcd efgh ijkl mnop"
+	env["SMTP_FROM"] = "me@gmail.com"
+	setEnv(t, env)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	if !cfg.SMTPConfigured {
+		t.Error("SMTPConfigured = false, want true when SMTP_HOST is set")
+	}
+	if cfg.SMTPPort != "587" {
+		t.Errorf("SMTPPort = %q, want the default 587", cfg.SMTPPort)
+	}
+}
+
+func TestLoadRequiresEverySMTPCredentialWhenTheHostIsSet(t *testing.T) {
+	// A half-configured transport has to fail at boot rather than on the
+	// first verification email — by then signup has already returned 201 and
+	// told someone to check their inbox.
+	for _, missing := range []string{"SMTP_USERNAME", "SMTP_PASSWORD", "SMTP_FROM"} {
+		clearEnv(t)
+		env := validEnv()
+		env["SMTP_HOST"] = "smtp.gmail.com"
+		env["SMTP_USERNAME"] = "me@gmail.com"
+		env["SMTP_PASSWORD"] = "abcdefghijklmnop"
+		env["SMTP_FROM"] = "me@gmail.com"
+		env[missing] = ""
+		setEnv(t, env)
+
+		_, err := Load()
+		if err == nil {
+			t.Fatalf("Load() with %s unset = nil, want an error", missing)
+		}
+		if !strings.Contains(err.Error(), missing) {
+			t.Errorf("Load() = %v, want it to name %s", err, missing)
+		}
+	}
+}
+
+func TestLoadAllowsSMTPToBeAbsentEntirely(t *testing.T) {
+	clearEnv(t)
+	setEnv(t, validEnv())
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() = %v, want nil", err)
+	}
+	if cfg.SMTPConfigured {
+		t.Error("SMTPConfigured = true with no SMTP_HOST; the no-op/Resend fallback must still be reachable")
 	}
 }

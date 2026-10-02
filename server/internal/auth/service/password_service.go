@@ -152,11 +152,8 @@ func (service *PasswordService) ForgotPassword(ctx context.Context, email string
 // - ErrAccountSuspended / ErrAccountDeactivated if account is locked.
 func (service *PasswordService) ResetPassword(ctx context.Context, email, code, newPassword string) error {
 	// 1. Validate password policy constraints
-	if len(newPassword) < service.config.Password.MinLength {
-		return autherr.ErrPasswordTooShort
-	}
-	if len(newPassword) > 72 {
-		return autherr.ErrPasswordTooLong
+	if err := helpers.ValidatePassword(newPassword, service.config.Password.MinLength); err != nil {
+		return err
 	}
 
 	normalizedEmail := helpers.NormalizeEmail(email)
@@ -268,11 +265,8 @@ func (service *PasswordService) ResetPassword(ctx context.Context, email, code, 
 // - ErrPasswordSame if newPassword is identical to oldPassword.
 func (service *PasswordService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	// 1. Validate new password length constraints
-	if len(newPassword) < service.config.Password.MinLength {
-		return autherr.ErrPasswordTooShort
-	}
-	if len(newPassword) > 72 {
-		return autherr.ErrPasswordTooLong
+	if err := helpers.ValidatePassword(newPassword, service.config.Password.MinLength); err != nil {
+		return err
 	}
 
 	// 2. Fetch user record

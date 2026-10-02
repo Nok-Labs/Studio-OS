@@ -57,6 +57,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
+                    },
+                    "409": {
+                        "description": "username already claimed",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -371,7 +377,7 @@ const docTemplate = `{
         },
         "/auth/signup": {
             "post": {
-                "description": "Registers a new user and sends an OTP for email verification.",
+                "description": "Registers a new user and sends an OTP for email verification.\nA duplicate email or username is NOT reported as an error. The\nhandler returns 202 with an identical body to a successful 201 so\nthat the endpoint cannot be used to discover which addresses have\naccounts. Clients must treat 202 as \"check your inbox\" exactly as\nthey treat 201 — no error branch exists for this case.",
                 "consumes": [
                     "application/json"
                 ],
@@ -400,14 +406,26 @@ const docTemplate = `{
                             "$ref": "#/definitions/handler.SignupResponse"
                         }
                     },
+                    "202": {
+                        "description": "duplicate email or username, masked as success",
+                        "schema": {
+                            "$ref": "#/definitions/handler.SignupResponse"
+                        }
+                    },
                     "400": {
                         "description": "invalid body",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
                     },
-                    "409": {
-                        "description": "email or username already registered",
+                    "401": {
+                        "description": "registration disabled",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "429": {
+                        "description": "too many requests",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
@@ -587,6 +605,12 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }
+                    },
+                    "409": {
+                        "description": "username already claimed",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
                     }
                 }
             }
@@ -691,9 +715,6 @@ const docTemplate = `{
         "handler.LoginRequest": {
             "type": "object",
             "properties": {
-                "device_id": {
-                    "type": "string"
-                },
                 "email": {
                     "type": "string"
                 },
@@ -713,9 +734,6 @@ const docTemplate = `{
         "handler.RefreshRequest": {
             "type": "object",
             "properties": {
-                "device_id": {
-                    "type": "string"
-                },
                 "refresh_token": {
                     "type": "string"
                 }

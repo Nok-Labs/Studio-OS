@@ -5,6 +5,9 @@ import "errors"
 
 // Credential and account status errors
 var (
+	// ErrInvalidEmail is returned when an email is structurally malformed.
+	ErrInvalidEmail = errors.New("invalid email address format")
+
 	// ErrInvalidCredentials is deliberately identical for "no such email" and "wrong password"
 	// to prevent user enumeration attacks.
 	ErrInvalidCredentials = errors.New("invalid email or password")
@@ -38,6 +41,12 @@ var (
 
 	// ErrUsernameTaken is returned when the chosen username already exists.
 	ErrUsernameTaken = errors.New("username is already taken")
+
+	// ErrInvalidUsername is returned when a username violates format/length rules.
+	ErrInvalidUsername = errors.New("username must be between 3 and 30 characters, and contain only letters, numbers, and underscores")
+
+	// ErrInvalidProfileName is returned when a profile name field is too long.
+	ErrInvalidProfileName = errors.New("profile name fields must not exceed 255 characters")
 
 	// ErrPasswordSame is returned when trying to change password to the same password.
 	ErrPasswordSame = errors.New("new password cannot be the same as old password")

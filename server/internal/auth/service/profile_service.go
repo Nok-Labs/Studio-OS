@@ -76,8 +76,11 @@ func (service *ProfileService) UpdateProfile(
 	userID uuid.UUID,
 	input model.ProfileInput,
 ) (*model.UserProfile, error) {
-	// 1. Validate username uniqueness if username feature is active
+	// 1. Validate username format and uniqueness if username feature is active
 	if service.config.Profile.EnableUsername && input.Username != nil && *input.Username != "" {
+		if err := helpers.ValidateUsername(*input.Username); err != nil {
+			return nil, err
+		}
 		exists, err := service.repo.CheckUsernameExists(ctx, *input.Username)
 		if err != nil {
 			return nil, err
@@ -87,6 +90,27 @@ func (service *ProfileService) UpdateProfile(
 			currentProfile, err := service.repo.GetProfileByUserID(ctx, userID)
 			if err != nil || !currentProfile.Username.Valid || currentProfile.Username.String != *input.Username {
 				return nil, autherr.ErrUsernameTaken
+			}
+		}
+	}
+
+	// 1a. Validate profile names
+	if service.config.Profile.EnableName {
+		if input.FirstName != nil {
+			if err := helpers.ValidateProfileName(*input.FirstName); err != nil {
+				return nil, err
+			}
+		}
+		if input.LastName != nil {
+			if err := helpers.ValidateProfileName(*input.LastName); err != nil {
+				return nil, err
+			}
+		}
+	}
+	if service.config.Profile.EnableDisplayName {
+		if input.DisplayName != nil {
+			if err := helpers.ValidateProfileName(*input.DisplayName); err != nil {
+				return nil, err
 			}
 		}
 	}
@@ -126,6 +150,9 @@ func (service *ProfileService) UpdateProfile(
 // CheckUsernameAvailable queries the persistence layer to determine if a username is available.
 // Returns true if the username is free to be registered, or false if already taken.
 func (service *ProfileService) CheckUsernameAvailable(ctx context.Context, username string) (bool, error) {
+	if err := helpers.ValidateUsername(username); err != nil {
+		return false, err
+	}
 	// 1. Query repository for username existence
 	exists, err := service.repo.CheckUsernameExists(ctx, username)
 	if err != nil {

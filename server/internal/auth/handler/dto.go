@@ -27,7 +27,8 @@ type ResendOTPRequest struct {
 type LoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
-	DeviceID string `json:"device_id"`
+	// AUTH 24 STUB
+	//DeviceID string `json:"device_id"`
 }
 
 // TokenPairResponse represents the JWT access and refresh tokens.
@@ -39,7 +40,8 @@ type TokenPairResponse struct {
 // RefreshRequest is used to exchange a valid refresh token for a new token pair.
 type RefreshRequest struct {
 	RefreshToken string `json:"refresh_token"`
-	DeviceID     string `json:"device_id"`
+	// AUTH 24 STUB
+	// DeviceID     string `json:"device_id"`
 }
 
 // LogoutRequest requires the refresh token to revoke it upon logout.

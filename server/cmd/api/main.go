@@ -91,9 +91,10 @@ func main() {
 
 	// Initialize Mailer.
 	//
-	// Mail transport. A missing RESEND_API_KEY falls back to a no-op mailer
-	// rather than refusing to boot, so someone without a Resend account can
-	// still run the server locally.
+	// Transport priority: SMTP first, then Resend, then the no-op fallback.
+	// SMTP is checked first because it is explicit — setting SMTP_HOST says
+	// "use this account", and having a RESEND_API_KEY left over from an
+	// earlier attempt must not silently win.
 	//
 	// The fallback is deliberately loud. It is a real footgun: a no-op mailer
 	// accepts signups, writes the OTP to the log and returns 201, so nobody
@@ -102,19 +103,25 @@ func main() {
 	// anyone tailing the boot log, or reading a support issue where the user
 	// "never got the email", sees it immediately.
 	var mailService model.Mailer
-	if cfg.MailConfigured {
+	switch {
+	case cfg.SMTPConfigured:
+		mailService = mailer.NewSMTPMailer(
+			cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername,
+			cfg.SMTPPassword, cfg.SMTPFrom, cfg.AppBaseURL)
+		slog.Info("Initialized SMTP Mailer", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "from", cfg.SMTPFrom)
+	case cfg.MailConfigured:
 		mailService = mailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFromAddress, cfg.AppBaseURL)
 		slog.Info("Initialized Resend Mailer", "from", cfg.ResendFromAddress)
-	} else {
+	default:
 		mailService = mailer.NewNoOpMailer()
 		slog.Warn("RESEND_API_KEY is not set: falling back to the no-op mailer. "+
 			"Emails will NOT be delivered — verification codes, password resets and "+
 			"invitations are written to the log instead. This is expected for local "+
 			"development, and a misconfiguration anywhere else.",
-			"hint", "set RESEND_API_KEY and RESEND_FROM_ADDRESS to send real mail")
+			"hint", "set SMTP_HOST (or RESEND_API_KEY) to send real mail")
 	}
 
-	// Initialize Auth Config
+	// Initialize Auth Config.
 	authCfg := authconfig.DefaultConfig()
 	if err := authCfg.Validate(); err != nil {
 		slog.Error("Invalid auth configuration", "error", err)
@@ -131,7 +138,8 @@ func main() {
 	}
 
 	// 6. Build HTTP Router
-	router := httpserver.NewRouter(handlers, jwtIssuer, cfg.AllowedOrigins, cfg.TrustedProxyCIDRs)
+	router := httpserver.NewRouter(handlers, jwtIssuer, cfg.AllowedOrigins,
+		cfg.TrustedProxyCIDRs, cfg.AuthRateLimitPerMinute)
 
 	// 7. Start HTTP Server with Graceful Shutdown
 	port := cfg.Port

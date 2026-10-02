@@ -72,11 +72,8 @@ func (service *SignupService) Signup(
 	}
 
 	// 2. Validate password requirements
-	if len(password) < service.config.Password.MinLength {
-		return nil, autherr.ErrPasswordTooShort
-	}
-	if len(password) > 72 {
-		return nil, autherr.ErrPasswordTooLong
+	if err := helpers.ValidatePassword(password, service.config.Password.MinLength); err != nil {
+		return nil, err
 	}
 
 	// 3. Normalize email address (lowercase and trim whitespace)
@@ -84,6 +81,9 @@ func (service *SignupService) Signup(
 
 	// 4. Validate unique username if username profile feature is enabled
 	if service.config.Profile.EnableUsername && profileInput.Username != nil && *profileInput.Username != "" {
+		if err := helpers.ValidateUsername(*profileInput.Username); err != nil {
+			return nil, err
+		}
 		exists, err := service.repo.CheckUsernameExists(ctx, *profileInput.Username)
 		if err != nil {
 			return nil, err
@@ -99,8 +99,83 @@ func (service *SignupService) Signup(
 		return nil, err
 	}
 
-	// 6. Create user record in database
-	user, err := service.repo.CreateUser(ctx, normalizedEmail, &hashedPassword)
+	// 6. Reject a non-http(s) avatar before the transaction opens. Validating
+	// here rather than at the repository means a bad value never reaches the
+	// database.
+	if err := helpers.ValidateAvatarURL(profileInput.AvatarURL); err != nil {
+		return nil, err
+	}
+	avatarURL := profileInput.AvatarURL
+
+	var tokens *model.TokenPair
+	var generatedOTP string
+
+	// 7. Create profile respecting configuration toggles
+	var firstName, lastName, username, displayName *string
+	if service.config.Profile.EnableName {
+		if profileInput.FirstName != nil {
+			if err := helpers.ValidateProfileName(*profileInput.FirstName); err != nil {
+				return nil, err
+			}
+			firstName = profileInput.FirstName
+		}
+		if profileInput.LastName != nil {
+			if err := helpers.ValidateProfileName(*profileInput.LastName); err != nil {
+				return nil, err
+			}
+			lastName = profileInput.LastName
+		}
+	}
+	if service.config.Profile.EnableUsername {
+		username = profileInput.Username
+	}
+	if service.config.Profile.EnableDisplayName {
+		if profileInput.DisplayName != nil {
+			if err := helpers.ValidateProfileName(*profileInput.DisplayName); err != nil {
+				return nil, err
+			}
+			displayName = profileInput.DisplayName
+		}
+	}
+
+	err = service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {
+		// Create user record in database
+		user, err := txRepo.CreateUser(ctx, normalizedEmail, &hashedPassword)
+		if err != nil {
+			return err
+		}
+
+		// Create profile respecting configuration toggles
+		_, err = txRepo.CreateProfile(ctx, user.ID, firstName, lastName, username, displayName, nil, avatarURL)
+		if err != nil {
+			return err
+		}
+
+		// If email verification is required, issue OTP
+		if service.config.Verification.Required {
+			generatedOTP, err = utils.GenerateOTP()
+			if err != nil {
+				return err
+			}
+
+			otpHash := utils.HashToken(generatedOTP)
+			expiresAt := time.Now().Add(service.config.Verification.OTPTTL)
+
+			_, err = txRepo.CreateOTP(ctx, user.ID, otpHash, "signup_verify", expiresAt)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
+
+		// If verification is optional, mark verified and issue tokens immediately
+		if err := txRepo.MarkEmailVerified(ctx, user.ID); err != nil {
+			return err
+		}
+		tokens, err = helpers.IssueTokenPair(ctx, txRepo, service.jwtIssuer, service.config.Session, user.ID)
+		return err
+	})
+
 	if err != nil {
 		if errors.Is(err, repository.ErrAlreadyExists) {
 			return nil, autherr.ErrEmailAlreadyRegistered
@@ -108,63 +183,18 @@ func (service *SignupService) Signup(
 		return nil, err
 	}
 
-	// 7. Create profile respecting configuration toggles
-	var firstName, lastName, username, displayName, avatarURL *string
-	if service.config.Profile.EnableName {
-		firstName = profileInput.FirstName
-		lastName = profileInput.LastName
-	}
-	if service.config.Profile.EnableUsername {
-		username = profileInput.Username
-	}
-	if service.config.Profile.EnableDisplayName {
-		displayName = profileInput.DisplayName
-	}
-
-	// Reject a non-http(s) avatar before the user row is created. Validating
-	// here rather than at the repository means a bad value never reaches the
-	// database, so there is no window in which an unsafe URL is persisted and
-	// only rejected on a later read.
-	if err := helpers.ValidateAvatarURL(profileInput.AvatarURL); err != nil {
-		return nil, err
-	}
-	avatarURL = profileInput.AvatarURL
-
-	_, err = service.repo.CreateProfile(ctx, user.ID, firstName, lastName, username, displayName, nil, avatarURL)
-	if err != nil {
-		return nil, err
-	}
-
-	// 8. If email verification is required, issue OTP and dispatch email
+	// 8. Dispatch email if verification is required
 	if service.config.Verification.Required {
-		otpCode, err := utils.GenerateOTP()
-		if err != nil {
-			return nil, err
-		}
-
-		otpHash := utils.HashToken(otpCode)
-		expiresAt := time.Now().Add(service.config.Verification.OTPTTL)
-
-		_, err = service.repo.CreateOTP(ctx, user.ID, otpHash, "signup_verify", expiresAt)
-		if err != nil {
-			return nil, err
-		}
-
 		if service.mailer != nil {
-			if err := service.mailer.SendOTP(ctx, normalizedEmail, otpCode); err != nil {
+			if err := service.mailer.SendOTP(ctx, normalizedEmail, generatedOTP); err != nil {
 				return nil, err
 			}
 		}
-
 		// Account is created but pending verification; no token pair returned yet
 		return nil, nil
 	}
 
-	// 9. If verification is optional, mark verified and issue tokens immediately
-	if err := service.repo.MarkEmailVerified(ctx, user.ID); err != nil {
-		return nil, err
-	}
-	return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
+	return tokens, nil
 }
 
 // VerifyEmail validates a pending signup verification code and activates the user account.

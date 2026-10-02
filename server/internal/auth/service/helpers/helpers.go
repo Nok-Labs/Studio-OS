@@ -4,6 +4,7 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"strings"
 	"time"
@@ -52,6 +53,49 @@ func IssueTokenPair(
 		AccessToken:  accessToken,
 		RefreshToken: rawRefreshToken,
 	}, nil
+}
+
+// ValidateEmail ensures the provided string is structurally a valid email address.
+func ValidateEmail(email string) error {
+	_, err := mail.ParseAddress(email)
+	if err != nil {
+		return autherr.ErrInvalidEmail
+	}
+	return nil
+}
+
+// ValidatePassword enforces password policy constraints.
+func ValidatePassword(password string, minLength int) error {
+	if len(password) < minLength {
+		return autherr.ErrPasswordTooShort
+	}
+	// bcrypt max length is 72 bytes. Check bytes, not runes.
+	if len(password) > 72 {
+		return autherr.ErrPasswordTooLong
+	}
+	return nil
+}
+
+// ValidateUsername enforces username format and length constraints.
+// Usernames must be lowercase alphanumeric and underscores.
+func ValidateUsername(username string) error {
+	if len(username) < 3 || len(username) > 30 {
+		return autherr.ErrInvalidUsername
+	}
+	for _, r := range username {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '_' {
+			return autherr.ErrInvalidUsername
+		}
+	}
+	return nil
+}
+
+// ValidateProfileName ensures profile fields (first name, last name, display name) do not exceed database limits.
+func ValidateProfileName(name string) error {
+	if len(name) > 255 {
+		return autherr.ErrInvalidProfileName
+	}
+	return nil
 }
 
 // NormalizeEmail canonicalizes an email string by converting it to lowercase and stripping leading/trailing whitespace.
