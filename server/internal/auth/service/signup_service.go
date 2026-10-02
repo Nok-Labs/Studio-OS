@@ -72,11 +72,8 @@ func (service *SignupService) Signup(
 	}
 
 	// 2. Validate password requirements
-	if len(password) < service.config.Password.MinLength {
-		return nil, autherr.ErrPasswordTooShort
-	}
-	if len(password) > 72 {
-		return nil, autherr.ErrPasswordTooLong
+	if err := helpers.ValidatePassword(password, service.config.Password.MinLength); err != nil {
+		return nil, err
 	}
 
 	// 3. Normalize email address (lowercase and trim whitespace)
@@ -84,6 +81,9 @@ func (service *SignupService) Signup(
 
 	// 4. Validate unique username if username profile feature is enabled
 	if service.config.Profile.EnableUsername && profileInput.Username != nil && *profileInput.Username != "" {
+		if err := helpers.ValidateUsername(*profileInput.Username); err != nil {
+			return nil, err
+		}
 		exists, err := service.repo.CheckUsernameExists(ctx, *profileInput.Username)
 		if err != nil {
 			return nil, err
@@ -113,14 +113,29 @@ func (service *SignupService) Signup(
 	// 7. Create profile respecting configuration toggles
 	var firstName, lastName, username, displayName *string
 	if service.config.Profile.EnableName {
-		firstName = profileInput.FirstName
-		lastName = profileInput.LastName
+		if profileInput.FirstName != nil {
+			if err := helpers.ValidateProfileName(*profileInput.FirstName); err != nil {
+				return nil, err
+			}
+			firstName = profileInput.FirstName
+		}
+		if profileInput.LastName != nil {
+			if err := helpers.ValidateProfileName(*profileInput.LastName); err != nil {
+				return nil, err
+			}
+			lastName = profileInput.LastName
+		}
 	}
 	if service.config.Profile.EnableUsername {
 		username = profileInput.Username
 	}
 	if service.config.Profile.EnableDisplayName {
-		displayName = profileInput.DisplayName
+		if profileInput.DisplayName != nil {
+			if err := helpers.ValidateProfileName(*profileInput.DisplayName); err != nil {
+				return nil, err
+			}
+			displayName = profileInput.DisplayName
+		}
 	}
 
 	err = service.repo.WithTx(ctx, func(txRepo repository.AuthRepository) error {

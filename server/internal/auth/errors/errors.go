@@ -42,6 +42,12 @@ var (
 	// ErrUsernameTaken is returned when the chosen username already exists.
 	ErrUsernameTaken = errors.New("username is already taken")
 
+	// ErrInvalidUsername is returned when a username violates format/length rules.
+	ErrInvalidUsername = errors.New("username must be between 3 and 30 characters, and contain only letters, numbers, and underscores")
+
+	// ErrInvalidProfileName is returned when a profile name field is too long.
+	ErrInvalidProfileName = errors.New("profile name fields must not exceed 255 characters")
+
 	// ErrPasswordSame is returned when trying to change password to the same password.
 	ErrPasswordSame = errors.New("new password cannot be the same as old password")
 
