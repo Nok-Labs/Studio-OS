@@ -28,8 +28,6 @@ definitions:
     type: object
   handler.LoginRequest:
     properties:
-      device_id:
-        type: string
       email:
         type: string
       password:
@@ -42,8 +40,6 @@ definitions:
     type: object
   handler.RefreshRequest:
     properties:
-      device_id:
-        type: string
       refresh_token:
         type: string
     type: object
@@ -151,6 +147,10 @@ paths:
             $ref: '#/definitions/handler.ErrorResponse'
         "401":
           description: invalid token
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: username already claimed
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
       summary: Accept invitation
@@ -361,7 +361,13 @@ paths:
     post:
       consumes:
       - application/json
-      description: Registers a new user and sends an OTP for email verification.
+      description: |-
+        Registers a new user and sends an OTP for email verification.
+        A duplicate email or username is NOT reported as an error. The
+        handler returns 202 with an identical body to a successful 201 so
+        that the endpoint cannot be used to discover which addresses have
+        accounts. Clients must treat 202 as "check your inbox" exactly as
+        they treat 201 — no error branch exists for this case.
       parameters:
       - description: Signup details
         in: body
@@ -376,12 +382,20 @@ paths:
           description: Created
           schema:
             $ref: '#/definitions/handler.SignupResponse'
+        "202":
+          description: duplicate email or username, masked as success
+          schema:
+            $ref: '#/definitions/handler.SignupResponse'
         "400":
           description: invalid body
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
-        "409":
-          description: email or username already registered
+        "401":
+          description: registration disabled
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "429":
+          description: too many requests
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
         "500":
@@ -493,6 +507,10 @@ paths:
             $ref: '#/definitions/handler.ErrorResponse'
         "401":
           description: unauthorized
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: username already claimed
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
       security:

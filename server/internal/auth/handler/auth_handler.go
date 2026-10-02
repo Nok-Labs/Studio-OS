@@ -26,13 +26,20 @@ func NewAuthHandler(svc *service.Services) *AuthHandler {
 // Signup godoc
 // @Summary      Create a new account
 // @Description  Registers a new user and sends an OTP for email verification.
+// @Description  A duplicate email or username is NOT reported as an error. The
+// @Description  handler returns 202 with an identical body to a successful 201 so
+// @Description  that the endpoint cannot be used to discover which addresses have
+// @Description  accounts. Clients must treat 202 as "check your inbox" exactly as
+// @Description  they treat 201 — no error branch exists for this case.
 // @Tags         auth
 // @Accept       json
 // @Produce      json
 // @Param        request body SignupRequest true "Signup details"
 // @Success      201 {object} SignupResponse
+// @Failure      202 {object} SignupResponse "duplicate email or username, masked as success"
 // @Failure      400 {object} ErrorResponse "invalid body"
-// @Failure      409 {object} ErrorResponse "email or username already registered"
+// @Failure      401 {object} ErrorResponse "registration disabled"
+// @Failure      429 {object} ErrorResponse "too many requests"
 // @Failure      500 {object} ErrorResponse "internal error"
 // @Router       /auth/signup [post]
 func (h *AuthHandler) Signup(c echo.Context) error {
@@ -332,6 +339,7 @@ func (h *AuthHandler) GetProfile(c echo.Context) error {
 // @Success      200 {object} model.UserProfile
 // @Failure      400 {object} ErrorResponse "invalid body"
 // @Failure      401 {object} ErrorResponse "unauthorized"
+// @Failure      409 {object} ErrorResponse "username already claimed"
 // @Router       /v1/users/me [patch]
 func (h *AuthHandler) UpdateProfile(c echo.Context) error {
 	var req UpdateProfileRequest
@@ -408,6 +416,7 @@ func (h *AuthHandler) DeleteProfile(c echo.Context) error {
 // @Success      200 {object} TokenPairResponse
 // @Failure      400 {object} ErrorResponse "invalid body"
 // @Failure      401 {object} ErrorResponse "invalid token"
+// @Failure      409 {object} ErrorResponse "username already claimed"
 // @Router       /auth/accept-invite [post]
 func (h *AuthHandler) AcceptInvite(c echo.Context) error {
 	var req AcceptInviteRequest
@@ -458,7 +467,8 @@ func (h *AuthHandler) handleError(c echo.Context, err error) error {
 
 	case errors.Is(err, autherr.ErrPasswordTooShort), errors.Is(err, autherr.ErrPasswordTooLong),
 		errors.Is(err, autherr.ErrPasswordSame), errors.Is(err, autherr.ErrInvalidAvatarURL),
-		errors.Is(err, autherr.ErrInvalidEmail):
+		errors.Is(err, autherr.ErrInvalidEmail), errors.Is(err, autherr.ErrInvalidUsername),
+		errors.Is(err, autherr.ErrInvalidProfileName):
 		return c.JSON(http.StatusBadRequest, ErrorResponse{Error: err.Error()})
 
 	default:
