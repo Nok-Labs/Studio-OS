@@ -17,10 +17,25 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/joho/godotenv"
 )
+
+// defaultAuthRateLimitPerMinute is the number of requests per minute a single
+// client may make to the unauthenticated auth endpoints when
+// RATE_LIMIT_PER_MINUTE is unset.
+//
+// 5 is a deliberate default, not an arbitrary one. These endpoints are the ones
+// that are reachable without a session and can burn server CPU (reset-password
+// runs a bcrypt hash) or spend money (forgot-password sends mail), so the
+// limiter is the first line of defence and 5 is far below any rate a real user
+// or a real frontend produces. A deployment that raises it is accepting a
+// weaker limit in exchange for shared-IP or client-behind-a-proxy conditions;
+// that is a legitimate trade, but it should be a decision someone made
+// deliberately rather than a number nobody looked at.
+const defaultAuthRateLimitPerMinute = 5
 
 // minJWTSecretBytes is the shortest signing secret Load will accept.
 //
@@ -125,11 +140,59 @@ type Config struct {
 	// and forward in a Referer header.
 	AppBaseURL string
 
+	// SMTPHost is the mail submission server to send through, e.g.
+	// smtp.gmail.com. Optional: unset the value falls back to Resend when
+	// RESEND_API_KEY is present, and to the no-op mailer otherwise.
+	//
+	// When set, SMTPUsername, SMTPPassword and SMTPFrom are all required —
+	// half-configured SMTP would otherwise accept a signup, fail partway
+	// through sending the verification code, and report success to a user who
+	// never receives it.
+	SMTPHost string
+
+	// SMTPPort is the submission port. Optional; defaults to "587", which is
+	// the port that negotiates STARTTLS.
+	SMTPPort string
+
+	// SMTPUsername authenticates against SMTPHost. Required when SMTPHost is set.
+	SMTPUsername string
+
+	// SMTPPassword authenticates against SMTPHost. For Gmail this is an app
+	// password rather than the account password — Google rejects plain
+	// passwords on SMTP for accounts with two-step verification enabled.
+	// Required when SMTPHost is set.
+	SMTPPassword string
+
+	// SMTPFrom is the sender address. Required when SMTPHost is set, and must
+	// be the address that owns SMTPUsername — Gmail rejects a From that does
+	// not match the authenticated account.
+	SMTPFrom string
+
+	// SMTPConfigured reports whether SMTP transport will be used.
+	//
+	// Derived here rather than at each call site so the decision to prefer
+	// SMTP over Resend, or over the no-op fallback, is made in exactly one
+	// place and cannot disagree with itself in two places.
+	SMTPConfigured bool
+
 	// GoogleClientID is the OAuth client ID used to verify Google ID tokens.
 	// Optional today: the OAuth provider registry is empty and no OAuth route
 	// is mounted, so an unset value is inert. It is read here so that wiring
 	// the provider is a config change rather than a code change.
 	GoogleClientID string
+
+	// AuthRateLimitPerMinute caps requests per minute, per resolved client IP,
+	// across the unauthenticated /auth endpoints.
+	//
+	// Optional; defaults to defaultAuthRateLimitPerMinute (5). A value below 1
+	// falls back to the default, because zero does not mean "unlimited" to the
+	// rate limiter — it means every auth request comes back 429.
+	//
+	// This is the one setting that has to move between environments. Every client
+	// behind a proxy shares one resolved IP unless TRUSTED_PROXY_CIDRS says
+	// otherwise, so a deployment where that is not configured correctly needs a
+	// higher limit or the first few users lock everyone else out.
+	AuthRateLimitPerMinute int
 }
 
 // Load reads .env if present, then reads and validates every environment
@@ -151,6 +214,11 @@ func Load() (*Config, error) {
 		JWTSecret:         os.Getenv("JWT_SECRET"),
 		ResendAPIKey:      os.Getenv("RESEND_API_KEY"),
 		ResendFromAddress: os.Getenv("RESEND_FROM_ADDRESS"),
+		SMTPHost:          os.Getenv("SMTP_HOST"),
+		SMTPPort:          os.Getenv("SMTP_PORT"),
+		SMTPUsername:      os.Getenv("SMTP_USERNAME"),
+		SMTPPassword:      os.Getenv("SMTP_PASSWORD"),
+		SMTPFrom:          os.Getenv("SMTP_FROM"),
 		GoogleClientID:    os.Getenv("GOOGLE_CLIENT_ID"),
 	}
 
@@ -177,6 +245,20 @@ func Load() (*Config, error) {
 	// Derived once, here, so the mailer decision is not re-derived by each
 	// caller and the two can never disagree.
 	cfg.MailConfigured = cfg.ResendAPIKey != ""
+
+	if cfg.SMTPPort == "" {
+		cfg.SMTPPort = "587"
+	}
+	cfg.SMTPConfigured = cfg.SMTPHost != ""
+
+	// Optional tuning. Unset, or anything that does not parse as a positive
+	// whole number, keeps the default — this is not a value worth failing a
+	// boot over, and a bad number must not silently become zero, which would
+	// reject every auth request rather than permit them.
+	cfg.AuthRateLimitPerMinute = defaultAuthRateLimitPerMinute
+	if v, err := strconv.Atoi(strings.TrimSpace(os.Getenv("RATE_LIMIT_PER_MINUTE"))); err == nil && v > 0 {
+		cfg.AuthRateLimitPerMinute = v
+	}
 
 	return cfg, cfg.validate()
 }
@@ -209,6 +291,23 @@ func (c *Config) validate() error {
 	if c.ResendAPIKey != "" && strings.TrimSpace(c.ResendFromAddress) == "" {
 		problems = append(problems,
 			"RESEND_FROM_ADDRESS is required when RESEND_API_KEY is set")
+	}
+
+	// Same reasoning as RESEND_FROM_ADDRESS above: SMTP is opt-in through
+	// SMTP_HOST, and once it is opted in a missing credential is a real
+	// misconfiguration rather than something to fall back from. Without this
+	// the server boots, then fails on the first verification email, having
+	// already told the user it was sent.
+	if c.SMTPHost != "" {
+		for name, value := range map[string]string{
+			"SMTP_USERNAME": c.SMTPUsername,
+			"SMTP_PASSWORD": c.SMTPPassword,
+			"SMTP_FROM":     c.SMTPFrom,
+		} {
+			if strings.TrimSpace(value) == "" {
+				problems = append(problems, name+" is required when SMTP_HOST is set")
+			}
+		}
 	}
 
 	// "Required" is not the same as "unguessable". A one-character secret

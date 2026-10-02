@@ -29,11 +29,30 @@ type Handlers struct {
 // trustedProxyCIDRs declares which reverse proxies may be believed when they
 // set X-Forwarded-For. See buildIPExtractor for why the rate limiter depends
 // on it.
-func NewRouter(h Handlers, jwtIssuer *utils.JWTIssuer, allowedOrigins, trustedProxyCIDRs []string) *echo.Echo {
+//
+// authRateLimitPerMinute is requests per minute per resolved client IP across
+// the unauthenticated auth routes. It arrives from configuration rather than a
+// literal because the right number is environment-specific: a backend where
+// every client resolves to the same proxy address needs a higher limit, and a
+// production deployment does not.
+func NewRouter(h Handlers, jwtIssuer *utils.JWTIssuer, allowedOrigins, trustedProxyCIDRs []string, authRateLimitPerMinute int) *echo.Echo {
 	e := echo.New()
 
 	// Resolve the true client IP before any middleware that keys on it runs.
 	e.IPExtractor = buildIPExtractor(trustedProxyCIDRs)
+
+	// State the trust model in the boot log. Which mode is active decides
+	// whether the rate limiter buckets by the real caller or by one shared
+	// proxy address, and nothing else in the logs distinguishes the two: a
+	// deployment with a wrong TRUSTED_PROXY_CIDRS behaves exactly like a
+	// correct one right up until somebody is locked out by everyone else.
+	// The value itself is logged so a fix needs no archaeology.
+	if len(trustedProxyCIDRs) == 0 {
+		slog.Info("client IP resolution: direct connection address; X-Forwarded-For is ignored")
+	} else {
+		slog.Info("client IP resolution: X-Forwarded-For, trusting only the configured proxies",
+			"cidr_count", len(trustedProxyCIDRs), "cidrs", trustedProxyCIDRs)
+	}
 
 	// Global middlewares
 	e.Use(middleware.RequestID())
@@ -81,9 +100,13 @@ func NewRouter(h Handlers, jwtIssuer *utils.JWTIssuer, allowedOrigins, trustedPr
 	// deprecated httprate.LimitByIP) would put every client behind a load
 	// balancer in one shared bucket, so five attempts from anyone would lock
 	// out every user.
-	loginRateLimit := echo.WrapMiddleware(
-		httprate.LimitBy(5, time.Minute, clientIPKey(e.IPExtractor)),
-	)
+	//
+	// The per-minute number comes from configuration because the correct value
+	// depends on how well client IPs are being resolved. Behind a proxy whose
+	// CIDRs are not trusted, every caller shares one bucket and a low limit
+	// locks out the entire user base — which is a config mistake, and the
+	// reason the trust mode is logged above rather than left implicit.
+	loginRateLimit := authRateLimiter(e.IPExtractor, authRateLimitPerMinute)
 
 	// Auth Public Routes
 	authGroup := e.Group("/auth")
@@ -114,6 +137,19 @@ func NewRouter(h Handlers, jwtIssuer *utils.JWTIssuer, allowedOrigins, trustedPr
 	userGroup.DELETE("/me", h.Auth.DeleteProfile)
 
 	return e
+}
+
+// authRateLimiter builds the middleware that caps the unauthenticated auth
+// routes.
+//
+// extractor is threaded in rather than derived here so the limiter buckets on
+// exactly the client IP the rest of the pipeline resolved. Deriving it a second
+// time would be a chance for the two to disagree, and a disagreement is
+// invisible until one user locks out everyone else.
+func authRateLimiter(extractor echo.IPExtractor, perMinute int) echo.MiddlewareFunc {
+	return echo.WrapMiddleware(
+		httprate.LimitBy(perMinute, time.Minute, clientIPKey(extractor)),
+	)
 }
 
 // buildIPExtractor returns the Echo IPExtractor matching the deployment's trust
