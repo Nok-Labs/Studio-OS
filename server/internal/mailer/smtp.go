@@ -1,3 +1,4 @@
+// Package mailer implements transactional email delivery.
 package mailer
 
 import (
@@ -31,6 +32,14 @@ type SMTPMailer struct {
 	// from is the envelope and header sender. With Gmail this must be the
 	// address that owns the app password, or the server rejects the message.
 	from string
+
+	// tlsConfig is the certificate verification used on STARTTLS. Nil means
+	// the standard behaviour — verify against the system roots, with ServerName
+	// set to host, which is what every public server needs.
+	//
+	// A non-nil value is for an internal relay presenting a certificate from a
+	// private CA, where the public roots will not have it.
+	tlsConfig *tls.Config
 
 	// appBaseURL builds the invitation link. See SendInvite.
 	appBaseURL string
@@ -131,7 +140,19 @@ func (m *SMTPMailer) send(ctx context.Context, to, subject, html string) error {
 	// a preference — and without it a Gmail app password would cross the
 	// network in the clear.
 	if ok, _ := client.Extension("STARTTLS"); ok {
-		if err := client.StartTLS(&tls.Config{ServerName: m.host}); err != nil {
+		// ServerName is always populated, whether or not a caller supplied
+		// their own config: without it the handshake fails outright with
+		// "either ServerName or InsecureSkipVerify must be specified", which
+		// is a confusing error to get from a host that was configured
+		// correctly except for this one field.
+		cfg := &tls.Config{ServerName: m.host}
+		if m.tlsConfig != nil {
+			cfg = m.tlsConfig.Clone()
+		}
+		if cfg.ServerName == "" {
+			cfg.ServerName = m.host
+		}
+		if err := client.StartTLS(cfg); err != nil {
 			return fmt.Errorf("smtp STARTTLS with %s: %w", m.host, err)
 		}
 	}
