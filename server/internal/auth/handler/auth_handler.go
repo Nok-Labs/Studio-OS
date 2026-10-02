@@ -1,3 +1,4 @@
+// Package handler implements the HTTP presentation layer for authentication.
 package handler
 
 import (

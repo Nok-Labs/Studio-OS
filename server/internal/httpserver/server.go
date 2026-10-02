@@ -1,3 +1,4 @@
+// Package httpserver constructs the Echo router and global middleware pipeline.
 package httpserver
 
 import (
