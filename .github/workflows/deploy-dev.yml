@@ -53,7 +53,7 @@ jobs:
             exit 1
           fi
           go install github.com/pressly/goose/v3/cmd/goose@latest
-          goose -dir server/migrations -driver postgres -dbstring "$DATABASE_URL" up
+          goose -dir server/migrations postgres "$DATABASE_URL" up
 
       # The Space is a Docker Space, so its repo is the build context: a
       # Dockerfile plus whatever the build needs. Assembled here rather than
