@@ -55,40 +55,7 @@ jobs:
           go install github.com/pressly/goose/v3/cmd/goose@latest
           goose -dir server/migrations postgres "$DATABASE_URL" up
 
-      # The Space is a Docker Space, so its repo is the build context: a
-      # Dockerfile plus whatever the build needs. Assembled here rather than
-      # pushed from server/ directly, so .env, tests and the sqlc/Makefile
-      # tooling never travel to a public Space.
-      - name: Assemble the Space
-        run: |
-          mkdir -p space
-          cp -r server/go.mod server/go.sum server/cmd server/internal \
-                server/docs server/migrations space/
-          cp server/Dockerfile space/Dockerfile
-
-          # app_port is the only field this adds; everything else reproduces
-          # the Space's existing card data so a deploy does not quietly strip
-          # the license or the title the Space was created with. This block
-          # replaces README.md outright, so a field left out here is lost.
-          cat > space/README.md <<'YAML'
-          ---
-          title: Studioos
-          emoji: "\U0001F3C6"
-          colorFrom: red
-          colorTo: indigo
-          sdk: docker
-          pinned: false
-          license: mit
-          app_port: 8080
-          ---
-          YAML
-
-          echo "Space contents:"
-          find space -maxdepth 1 -mindepth 1 | sort
-
-      # Pushing to the Space repo is what starts a rebuild — there is no
-      # separate "deploy" call. The token needs write access to the Space.
-      - name: Push to the Hugging Face Space
+      - name: Assemble and Push to the Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_SPACE: ${{ secrets.HF_SPACE }}
@@ -98,15 +65,71 @@ jobs:
             exit 1
           fi
 
+          # Clone the shared space so we don't wipe out other backends (like slipwise)
+          git clone -q "https://hf:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" space
+          
+          # 1. Update the studio source code in the space
+          rm -rf space/studio
+          mkdir -p space/studio
+          cp -r server/go.mod server/go.sum server/cmd server/internal \
+                server/docs server/migrations space/studio/
+
+          # 2. Wire Studio into the Dockerfile if it's not already there
+          if ! grep -q "studio-build" space/Dockerfile; then
+            echo "Adding Studio build stage to Dockerfile..."
+            # Insert build stage before the Final image stage
+            sed -i '/# ---- Final image ----/i \
+          # ---- Build Studio (Go) ----\n\
+          FROM golang:1.26-alpine AS studio-build\n\
+          WORKDIR /src\n\
+          COPY studio/ .\n\
+          RUN go install github.com/swaggo/swag/cmd/swag@latest\n\
+          RUN swag init -g cmd/api/main.go -o docs\n\
+          RUN go build -o /out/studio ./cmd/api\n' space/Dockerfile
+
+            # Insert the binary copy in the Final image stage
+            sed -i '/COPY deploy\/Caddyfile/i \
+          COPY --from=studio-build /out/studio /app/studio/studio\n' space/Dockerfile
+          fi
+
+          # 3. Wire Studio into supervisord.conf if missing
+          if ! grep -q "\[program:studio\]" space/deploy/supervisord.conf; then
+            echo "Adding Studio to supervisord.conf..."
+            cat << 'EOF' >> space/deploy/supervisord.conf
+
+          [program:studio]
+          command=/app/studio/studio
+          directory=/app/studio
+          autostart=true
+          autorestart=true
+          stdout_logfile=/dev/stdout
+          stdout_logfile_maxbytes=0
+          stderr_logfile=/dev/stderr
+          stderr_logfile_maxbytes=0
+          environment=PORT="8082"
+          EOF
+          fi
+
+          # 4. Wire Studio into Caddyfile if missing
+          if ! grep -q "/studio/\*" space/deploy/Caddyfile; then
+            echo "Adding Studio route to Caddyfile..."
+            # Insert the route before the Default handle block
+            sed -i '/# Default:/i \
+              # Studio (Go/Echo) — internal port 8082\n\
+              handle_path /studio/* {\n\
+                  reverse_proxy localhost:8082\n\
+              }\n' space/deploy/Caddyfile
+          fi
+
+          # 5. Commit and Push
           cd space
-          git init -q
+          git config user.name "deploy-dev"
+          git config user.email "deploy@localhost"
           git add -A
-          git -c user.name="deploy-dev" -c user.email="deploy@localhost" \
-            commit -q -m "deploy: ${GITHUB_SHA} from develop"
+          git commit -q -m "deploy(studio): ${GITHUB_SHA} from develop"
+          
+          # Push to the Space repo to trigger a rebuild
+          git push --force "https://hf:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" HEAD:main
 
-          git push --force \
-            "https://hf:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE}" \
-            HEAD:main
-
-          echo "Pushed. The Space rebuild takes a few minutes; check its"
-          echo "logs tab, then GET /health on the Space URL."
+          echo "Pushed Studio to the shared Space! The Space rebuild takes a few minutes."
+          echo "Your backend will be available at: https://huggingface.co/spaces/${HF_SPACE}/studio"
