@@ -27,19 +27,24 @@ func NewAuthHandler(svc *service.Services) *AuthHandler {
 // Signup godoc
 // @Summary      Create a new account
 // @Description  Registers a new user and sends an OTP for email verification.
-// @Description  A duplicate email or username is NOT reported as an error. The
-// @Description  handler returns 202 with an identical body to a successful 201 so
-// @Description  that the endpoint cannot be used to discover which addresses have
-// @Description  accounts. Clients must treat 202 as "check your inbox" exactly as
-// @Description  they treat 201 — no error branch exists for this case.
+// @Description  A duplicate email is NOT reported as an error. The handler
+// @Description  returns 202 with an identical body to a successful 201 so that
+// @Description  the endpoint cannot be used to discover which addresses have
+// @Description  accounts. Clients must treat 202 as "check your inbox" exactly
+// @Description  as they treat 201 — no error branch exists for that case.
+// @Description  A taken username is reported honestly as 409: it says nothing
+// @Description  about any email address, and no account is created when it is
+// @Description  returned, so masking it would tell the caller a code was sent
+// @Description  for an account that does not exist.
 // @Tags         auth
 // @Accept       json
 // @Produce      json
 // @Param        request body SignupRequest true "Signup details"
 // @Success      201 {object} SignupResponse
-// @Failure      202 {object} SignupResponse "duplicate email or username, masked as success"
+// @Failure      202 {object} SignupResponse "duplicate email, masked as success"
 // @Failure      400 {object} ErrorResponse "invalid body"
 // @Failure      401 {object} ErrorResponse "registration disabled"
+// @Failure      409 {object} ErrorResponse "username already taken"
 // @Failure      429 {object} ErrorResponse "too many requests"
 // @Failure      500 {object} ErrorResponse "internal error"
 // @Router       /auth/signup [post]
@@ -60,7 +65,15 @@ func (h *AuthHandler) Signup(c echo.Context) error {
 
 	tokens, err := h.svc.Signup.Signup(c.Request().Context(), req.Email, req.Password, profileInput)
 	if err != nil {
-		if errors.Is(err, autherr.ErrEmailAlreadyRegistered) || errors.Is(err, autherr.ErrUsernameTaken) {
+		// Email only. ErrUsernameTaken used to be masked here too, and that
+		// was a lost signup rather than a protection: the username check is a
+		// SELECT that runs before the transaction opens, so a collision aborts
+		// with no user, no profile and no OTP on record — yet the caller was
+		// told a verification code was on its way. Nothing was enumerable from
+		// a taken username, so the mask bought no security and cost the user
+		// the only account they were trying to create. Fall through to
+		// handleError, which reports it as 409.
+		if errors.Is(err, autherr.ErrEmailAlreadyRegistered) {
 			return c.JSON(http.StatusAccepted, SignupResponse{Message: "If the details are valid, a verification code has been sent."})
 		}
 		return h.handleError(c, err)

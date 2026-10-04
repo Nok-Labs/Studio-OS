@@ -371,7 +371,7 @@
         },
         "/auth/signup": {
             "post": {
-                "description": "Registers a new user and sends an OTP for email verification.\nA duplicate email or username is NOT reported as an error. The\nhandler returns 202 with an identical body to a successful 201 so\nthat the endpoint cannot be used to discover which addresses have\naccounts. Clients must treat 202 as \"check your inbox\" exactly as\nthey treat 201 — no error branch exists for this case.",
+                "description": "Registers a new user and sends an OTP for email verification.\nA duplicate email is NOT reported as an error. The handler\nreturns 202 with an identical body to a successful 201 so that\nthe endpoint cannot be used to discover which addresses have\naccounts. Clients must treat 202 as \"check your inbox\" exactly\nas they treat 201 — no error branch exists for that case.\nA taken username is reported honestly as 409: it says nothing\nabout any email address, and no account is created when it is\nreturned, so masking it would tell the caller a code was sent\nfor an account that does not exist.",
                 "consumes": [
                     "application/json"
                 ],
@@ -401,7 +401,7 @@
                         }
                     },
                     "202": {
-                        "description": "duplicate email or username, masked as success",
+                        "description": "duplicate email, masked as success",
                         "schema": {
                             "$ref": "#/definitions/handler.SignupResponse"
                         }
@@ -414,6 +414,12 @@
                     },
                     "401": {
                         "description": "registration disabled",
+                        "schema": {
+                            "$ref": "#/definitions/handler.ErrorResponse"
+                        }
+                    },
+                    "409": {
+                        "description": "username already taken",
                         "schema": {
                             "$ref": "#/definitions/handler.ErrorResponse"
                         }

@@ -363,11 +363,15 @@ paths:
       - application/json
       description: |-
         Registers a new user and sends an OTP for email verification.
-        A duplicate email or username is NOT reported as an error. The
-        handler returns 202 with an identical body to a successful 201 so
-        that the endpoint cannot be used to discover which addresses have
-        accounts. Clients must treat 202 as "check your inbox" exactly as
-        they treat 201 — no error branch exists for this case.
+        A duplicate email is NOT reported as an error. The handler
+        returns 202 with an identical body to a successful 201 so that
+        the endpoint cannot be used to discover which addresses have
+        accounts. Clients must treat 202 as "check your inbox" exactly
+        as they treat 201 — no error branch exists for that case.
+        A taken username is reported honestly as 409: it says nothing
+        about any email address, and no account is created when it is
+        returned, so masking it would tell the caller a code was sent
+        for an account that does not exist.
       parameters:
       - description: Signup details
         in: body
@@ -383,7 +387,7 @@ paths:
           schema:
             $ref: '#/definitions/handler.SignupResponse'
         "202":
-          description: duplicate email or username, masked as success
+          description: duplicate email, masked as success
           schema:
             $ref: '#/definitions/handler.SignupResponse'
         "400":
@@ -392,6 +396,10 @@ paths:
             $ref: '#/definitions/handler.ErrorResponse'
         "401":
           description: registration disabled
+          schema:
+            $ref: '#/definitions/handler.ErrorResponse'
+        "409":
+          description: username already taken
           schema:
             $ref: '#/definitions/handler.ErrorResponse'
         "429":
