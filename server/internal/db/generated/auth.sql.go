@@ -216,7 +216,7 @@ const createUser = `-- name: CreateUser :one
 
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at
+RETURNING id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at, role
 `
 
 type CreateUserParams struct {
@@ -239,6 +239,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsDeactivated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
@@ -456,7 +457,7 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenHash string) (Refres
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at FROM users
+SELECT id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at, role FROM users
 WHERE email = $1
 `
 
@@ -472,12 +473,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.IsDeactivated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at FROM users
+SELECT id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at, role FROM users
 WHERE id = $1
 `
 
@@ -493,12 +495,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.IsDeactivated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByOAuthProvider = `-- name: GetUserByOAuthProvider :one
-SELECT u.id, u.email, u.password_hash, u.email_verified_at, u.is_suspended, u.is_deactivated, u.created_at, u.updated_at FROM users u
+SELECT u.id, u.email, u.password_hash, u.email_verified_at, u.is_suspended, u.is_deactivated, u.created_at, u.updated_at, u.role FROM users u
 JOIN oauth_connections o ON u.id = o.user_id
 WHERE o.provider = $1 AND o.provider_user_id = $2
 `
@@ -520,6 +523,7 @@ func (q *Queries) GetUserByOAuthProvider(ctx context.Context, arg GetUserByOAuth
 		&i.IsDeactivated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }

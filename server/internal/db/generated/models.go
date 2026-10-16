@@ -73,4 +73,5 @@ type User struct {
 	IsDeactivated   bool        `json:"is_deactivated"`
 	CreatedAt       time.Time   `json:"created_at"`
 	UpdatedAt       time.Time   `json:"updated_at"`
+	Role            string      `json:"role"`
 }
