@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"server/internal/auth/handler"
+	"server/internal/auth/repository"
 	"server/internal/auth/utils"
 
 	_ "server/docs"
@@ -36,7 +37,14 @@ type Handlers struct {
 // literal because the right number is environment-specific: a backend where
 // every client resolves to the same proxy address needs a higher limit, and a
 // production deployment does not.
-func NewRouter(h Handlers, jwtIssuer *utils.JWTIssuer, allowedOrigins, trustedProxyCIDRs []string, authRateLimitPerMinute int) *echo.Echo {
+func NewRouter(
+	h Handlers,
+	repo repository.AuthRepository,
+	jwtIssuer *utils.JWTIssuer,
+	allowedOrigins,
+	trustedProxyCIDRs []string,
+	authRateLimitPerMinute int,
+) *echo.Echo {
 	e := echo.New()
 
 	// Resolve the true client IP before any middleware that keys on it runs.
@@ -128,7 +136,7 @@ func NewRouter(h Handlers, jwtIssuer *utils.JWTIssuer, allowedOrigins, trustedPr
 
 	// Protected API Routes
 	v1 := e.Group("/v1")
-	v1.Use(handler.RequireAuth(jwtIssuer))
+	v1.Use(handler.RequireAuth(jwtIssuer), handler.LoadUser(repo))
 
 	// User/Profile Protected Routes
 	userGroup := v1.Group("/users")

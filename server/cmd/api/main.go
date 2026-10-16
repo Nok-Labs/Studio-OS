@@ -138,8 +138,14 @@ func main() {
 	}
 
 	// 6. Build HTTP Router
-	router := httpserver.NewRouter(handlers, jwtIssuer, cfg.AllowedOrigins,
-		cfg.TrustedProxyCIDRs, cfg.AuthRateLimitPerMinute)
+	router := httpserver.NewRouter(
+		handlers,
+		authRepo,
+		jwtIssuer,
+		cfg.AllowedOrigins,
+		cfg.TrustedProxyCIDRs,
+		cfg.AuthRateLimitPerMinute,
+	)
 
 	// 7. Start HTTP Server with Graceful Shutdown
 	port := cfg.Port
