@@ -52,6 +52,7 @@ type Profile struct {
 	AvatarUrl   pgtype.Text `json:"avatar_url"`
 	CreatedAt   time.Time   `json:"created_at"`
 	UpdatedAt   time.Time   `json:"updated_at"`
+	StaffRole   *string     `json:"staff_role"`
 }
 
 type RefreshToken struct {

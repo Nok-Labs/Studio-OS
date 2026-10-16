@@ -139,7 +139,7 @@ INSERT INTO profiles (
   avatar_url
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at
+RETURNING id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at, staff_role
 `
 
 type CreateProfileParams struct {
@@ -177,6 +177,7 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (P
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StaffRole,
 	)
 	return i, err
 }
@@ -414,7 +415,7 @@ func (q *Queries) GetOAuthProvidersForUser(ctx context.Context, userID uuid.UUID
 }
 
 const getProfileByUserID = `-- name: GetProfileByUserID :one
-SELECT id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at FROM profiles
+SELECT id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at, staff_role FROM profiles
 WHERE user_id = $1
 `
 
@@ -432,6 +433,7 @@ func (q *Queries) GetProfileByUserID(ctx context.Context, userID uuid.UUID) (Pro
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StaffRole,
 	)
 	return i, err
 }
@@ -686,7 +688,7 @@ SET
   profile_url = COALESCE($5, profile_url),
   avatar_url = COALESCE($6, avatar_url)
 WHERE user_id = $7
-RETURNING id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at
+RETURNING id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at, staff_role
 `
 
 type UpdateProfileParams struct {
@@ -721,6 +723,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (P
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StaffRole,
 	)
 	return i, err
 }
