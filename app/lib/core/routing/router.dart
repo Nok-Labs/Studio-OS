@@ -32,6 +32,10 @@ GoRouter router(Ref ref) {
       // We set the isLoggedIn to whether or not the token is null. Null means
       // the user doesnt have a JWT access token which implies they are not logged in
       final bool isLoggedIn = token != null;
+      // Reserved for the post-signup username flow below, which is not wired
+      // up yet. It is referenced in the commented redirect block, so keep it
+      // in place rather than deleting it out of order.
+      // ignore: unused_local_variable
       final isSetUsernameRoute = state.uri.path == '/set-username';
 
       // This creates the authentication routes... so we can exclude them as public
