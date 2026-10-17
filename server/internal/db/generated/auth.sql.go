@@ -139,7 +139,7 @@ INSERT INTO profiles (
   avatar_url
 )
 VALUES ($1, $2, $3, $4, $5, $6, $7)
-RETURNING id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at
+RETURNING id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at, staff_role
 `
 
 type CreateProfileParams struct {
@@ -177,6 +177,7 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (P
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StaffRole,
 	)
 	return i, err
 }
@@ -216,7 +217,7 @@ const createUser = `-- name: CreateUser :one
 
 INSERT INTO users (email, password_hash)
 VALUES ($1, $2)
-RETURNING id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at
+RETURNING id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at, role
 `
 
 type CreateUserParams struct {
@@ -239,6 +240,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsDeactivated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
@@ -413,7 +415,7 @@ func (q *Queries) GetOAuthProvidersForUser(ctx context.Context, userID uuid.UUID
 }
 
 const getProfileByUserID = `-- name: GetProfileByUserID :one
-SELECT id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at FROM profiles
+SELECT id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at, staff_role FROM profiles
 WHERE user_id = $1
 `
 
@@ -431,6 +433,7 @@ func (q *Queries) GetProfileByUserID(ctx context.Context, userID uuid.UUID) (Pro
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StaffRole,
 	)
 	return i, err
 }
@@ -456,7 +459,7 @@ func (q *Queries) GetRefreshToken(ctx context.Context, tokenHash string) (Refres
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at FROM users
+SELECT id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at, role FROM users
 WHERE email = $1
 `
 
@@ -472,12 +475,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error
 		&i.IsDeactivated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at FROM users
+SELECT id, email, password_hash, email_verified_at, is_suspended, is_deactivated, created_at, updated_at, role FROM users
 WHERE id = $1
 `
 
@@ -493,12 +497,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.IsDeactivated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
 
 const getUserByOAuthProvider = `-- name: GetUserByOAuthProvider :one
-SELECT u.id, u.email, u.password_hash, u.email_verified_at, u.is_suspended, u.is_deactivated, u.created_at, u.updated_at FROM users u
+SELECT u.id, u.email, u.password_hash, u.email_verified_at, u.is_suspended, u.is_deactivated, u.created_at, u.updated_at, u.role FROM users u
 JOIN oauth_connections o ON u.id = o.user_id
 WHERE o.provider = $1 AND o.provider_user_id = $2
 `
@@ -520,6 +525,7 @@ func (q *Queries) GetUserByOAuthProvider(ctx context.Context, arg GetUserByOAuth
 		&i.IsDeactivated,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Role,
 	)
 	return i, err
 }
@@ -682,7 +688,7 @@ SET
   profile_url = COALESCE($5, profile_url),
   avatar_url = COALESCE($6, avatar_url)
 WHERE user_id = $7
-RETURNING id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at
+RETURNING id, user_id, first_name, last_name, username, display_name, profile_url, avatar_url, created_at, updated_at, staff_role
 `
 
 type UpdateProfileParams struct {
@@ -717,6 +723,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (P
 		&i.AvatarUrl,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.StaffRole,
 	)
 	return i, err
 }
