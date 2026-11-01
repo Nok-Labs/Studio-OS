@@ -1,12 +1,18 @@
-package handler
+// Package middleware carries the authentication middleware and the context
+// accessors that go with it: RequireAuth validates a JWT, LoadUser loads the
+// account behind it, and GetUserID reads back the id RequireAuth wrote.
+package middleware
 
 import (
 	"net/http"
 	"strings"
 
+	"server/internal/auth/autherr"
+	"server/internal/auth/httperr"
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
-	"server/internal/auth/utils"
+	"server/internal/auth/token"
+	"server/internal/platform/apiresponse"
 
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -15,23 +21,23 @@ import (
 // RequireAuth is a middleware that enforces JWT authentication for protected routes.
 // It extracts the token from the Authorization header, validates it using the JWTIssuer,
 // and injects the user_id into the Echo context.
-func RequireAuth(issuer *utils.JWTIssuer) echo.MiddlewareFunc {
+func RequireAuth(issuer *token.JWTIssuer) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			authHeader := c.Request().Header.Get("Authorization")
 			if authHeader == "" {
-				return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "missing authorization header"})
+				return apiresponse.Reject(c, http.StatusUnauthorized, "invalid_token", "Sign in to continue.")
 			}
 
 			parts := strings.Split(authHeader, " ")
 			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "invalid authorization header format"})
+				return apiresponse.Reject(c, http.StatusUnauthorized, "invalid_token", "Sign in to continue.")
 			}
 
 			tokenString := parts[1]
 			claims, err := issuer.Validate(tokenString)
 			if err != nil {
-				return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "invalid or expired token"})
+				return apiresponse.Reject(c, http.StatusUnauthorized, "invalid_token", "Your session has expired. Please sign in again.")
 			}
 
 			// Store user ID in context for downstream handlers
@@ -53,51 +59,26 @@ func LoadUser(repo repository.AuthRepository) echo.MiddlewareFunc {
 			// Fetch the row
 			user, err := repo.GetUserByID(c.Request().Context(), id)
 			if err != nil {
-				return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "user does not exist"})
+				return apiresponse.Reject(c, http.StatusUnauthorized, "invalid_token", "Your session has expired. Please sign in again.")
 			}
 
 			// If suspended or deactivated
 			if user.IsSuspended {
-				return c.JSON(http.StatusForbidden, ErrorResponse{Error: "account suspended"})
+				return httperr.Fail(c, autherr.ErrAccountSuspended)
 			}
 
 			if user.IsDeactivated {
-				return c.JSON(http.StatusForbidden, ErrorResponse{Error: "account deactivated"})
+				return httperr.Fail(c, autherr.ErrAccountDeactivated)
 			}
 
-			// Store the account so RequireRole can read it
+			// Store the account so downstream handlers can read it
 			c.Set("account", model.Actor{
 				UserID:        id,
-				Role:          model.Role(user.Role),
+				Email:         user.Email,
 				IsSuspended:   user.IsSuspended,
 				IsDeactivated: user.IsDeactivated,
 			})
 			return next(c)
-		}
-	}
-
-}
-
-// RequireRole refuses the request unless the account's role is one of allowed.
-// Must run after LoadUser.
-func RequireRole(allowed ...model.Role) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			// Read the account from context
-			account, ok := c.Get("account").(model.Actor)
-
-			// Is their role in `allowed`?
-			if !ok {
-				return c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "not authenticated"})
-			}
-
-			for _, role := range allowed {
-				if account.Role == role {
-					return next(c)
-				}
-			}
-
-			return c.JSON(http.StatusForbidden, ErrorResponse{Error: "not allowed"})
 		}
 	}
 }
@@ -111,4 +92,15 @@ func GetUserID(c echo.Context) uuid.UUID {
 		panic("user_id missing from context; did you forget the RequireAuth middleware?")
 	}
 	return id
+}
+
+// GetActor extracts the authenticated Actor from the Echo context.
+// It panics if the account is missing, which is safe because this should only be called
+// in handlers protected by LoadUser.
+func GetActor(c echo.Context) model.Actor {
+	actor, ok := c.Get("account").(model.Actor)
+	if !ok {
+		panic("account missing from context; did you forget the LoadUser middleware?")
+	}
+	return actor
 }
