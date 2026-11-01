@@ -1,5 +1,6 @@
-// Package utils provides cryptographic and security helpers for authentication.
-package utils
+// Package token issues and validates the auth domain's tokens: signed JWTs,
+// opaque refresh tokens, and numeric OTPs.
+package token
 
 import (
 	"errors"
@@ -44,7 +45,10 @@ func (issuer *JWTIssuer) Issue(userID uuid.UUID, ttl time.Duration) (string, err
 // Validate checks the signature and expiration of a JWT string.
 func (issuer *JWTIssuer) Validate(tokenString string) (*Claims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		// Pin the algorithm. Accepting any HMAC method would let a token signed
+		// with HS384/HS512 through a verifier configured for HS256, which is not
+		// the contract we issue under.
+		if token.Method != jwt.SigningMethodHS256 {
 			return nil, ErrInvalidToken
 		}
 		return issuer.secret, nil
