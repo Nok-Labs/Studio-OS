@@ -6,11 +6,11 @@ import (
 
 	"github.com/google/uuid"
 
+	"server/internal/auth/autherr"
 	"server/internal/auth/config"
-	autherr "server/internal/auth/errors"
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
-	"server/internal/auth/service/helpers"
+	"server/internal/auth/validate"
 )
 
 // ProfileService manages user profiles, identity details, and username availability.
@@ -54,7 +54,7 @@ func (service *ProfileService) GetProfile(ctx context.Context, userID uuid.UUID)
 	}
 
 	// 3. Map database models to domain UserProfile
-	return helpers.MapToUserProfile(user, profile), nil
+	return repository.MapToUserProfile(user, profile), nil
 }
 
 // UpdateProfile updates the profile attributes of an existing user.
@@ -78,7 +78,7 @@ func (service *ProfileService) UpdateProfile(
 ) (*model.UserProfile, error) {
 	// 1. Validate username format and uniqueness if username feature is active
 	if service.config.Profile.EnableUsername && input.Username != nil && *input.Username != "" {
-		if err := helpers.ValidateUsername(*input.Username); err != nil {
+		if err := validate.ValidateUsername(*input.Username); err != nil {
 			return nil, err
 		}
 		exists, err := service.repo.CheckUsernameExists(ctx, *input.Username)
@@ -97,19 +97,19 @@ func (service *ProfileService) UpdateProfile(
 	// 1a. Validate profile names
 	if service.config.Profile.EnableName {
 		if input.FirstName != nil {
-			if err := helpers.ValidateProfileName(*input.FirstName); err != nil {
+			if err := validate.ValidateProfileName(*input.FirstName); err != nil {
 				return nil, err
 			}
 		}
 		if input.LastName != nil {
-			if err := helpers.ValidateProfileName(*input.LastName); err != nil {
+			if err := validate.ValidateProfileName(*input.LastName); err != nil {
 				return nil, err
 			}
 		}
 	}
 	if service.config.Profile.EnableDisplayName {
 		if input.DisplayName != nil {
-			if err := helpers.ValidateProfileName(*input.DisplayName); err != nil {
+			if err := validate.ValidateProfileName(*input.DisplayName); err != nil {
 				return nil, err
 			}
 		}
@@ -118,17 +118,24 @@ func (service *ProfileService) UpdateProfile(
 	// 1b. Reject an avatar URL that is not plain http(s), before it reaches the
 	// database. The value is stored verbatim and rendered by clients, so an
 	// unchecked scheme (javascript:, data:) is a stored-injection surface.
-	if err := helpers.ValidateAvatarURL(input.AvatarURL); err != nil {
+	if err := validate.ValidateAvatarURL(input.AvatarURL); err != nil {
 		return nil, err
 	}
 
-	// 2. Persist profile changes in database
+	// 2. Persist profile changes in database. A username is only stored when
+	// the feature is enabled; otherwise a caller could set a field the
+	// configuration says this deployment does not use.
+	var username *string
+	if service.config.Profile.EnableUsername {
+		username = input.Username
+	}
+
 	profile, err := service.repo.UpdateProfile(
 		ctx,
 		userID,
 		input.FirstName,
 		input.LastName,
-		input.Username,
+		username,
 		input.DisplayName,
 		nil,
 		input.AvatarURL,
@@ -144,13 +151,13 @@ func (service *ProfileService) UpdateProfile(
 	}
 
 	// 4. Map updated database models to domain UserProfile
-	return helpers.MapToUserProfile(user, profile), nil
+	return repository.MapToUserProfile(user, profile), nil
 }
 
 // CheckUsernameAvailable queries the persistence layer to determine if a username is available.
 // Returns true if the username is free to be registered, or false if already taken.
 func (service *ProfileService) CheckUsernameAvailable(ctx context.Context, username string) (bool, error) {
-	if err := helpers.ValidateUsername(username); err != nil {
+	if err := validate.ValidateUsername(username); err != nil {
 		return false, err
 	}
 	// 1. Query repository for username existence
@@ -166,4 +173,13 @@ func (service *ProfileService) CheckUsernameAvailable(ctx context.Context, usern
 // DeleteProfile deletes a user's associated profile record while retaining their authentication credentials.
 func (service *ProfileService) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
 	return service.repo.DeleteProfile(ctx, userID)
+}
+
+// DeleteAccount permanently deletes a user account.
+//
+// Deleting the users row is enough: profiles, oauth_connections, refresh_tokens
+// and otp_codes all reference it with ON DELETE CASCADE, so the single
+// statement removes the account and every credential attached to it.
+func (service *ProfileService) DeleteAccount(ctx context.Context, userID uuid.UUID) error {
+	return service.repo.DeleteUser(ctx, userID)
 }

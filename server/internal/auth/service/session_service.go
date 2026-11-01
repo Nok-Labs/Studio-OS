@@ -5,27 +5,28 @@ import (
 	"errors"
 	"time"
 
+	"server/internal/auth/autherr"
 	"server/internal/auth/config"
-	autherr "server/internal/auth/errors"
+	"server/internal/auth/hashing"
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
-	"server/internal/auth/service/helpers"
-	"server/internal/auth/utils"
-	db "server/internal/db/generated"
+	"server/internal/auth/token"
+	"server/internal/auth/validate"
+	db "server/internal/platform/db/generated"
 )
 
 // SessionService handles authentication, session renewal, token revocation, and OAuth logins.
 type SessionService struct {
 	repo      repository.AuthRepository
 	config    config.AuthConfig
-	jwtIssuer *utils.JWTIssuer
+	jwtIssuer *token.JWTIssuer
 }
 
 // NewSessionService constructs a new SessionService.
 func NewSessionService(
 	repo repository.AuthRepository,
 	cfg config.AuthConfig,
-	jwtIssuer *utils.JWTIssuer,
+	jwtIssuer *token.JWTIssuer,
 ) *SessionService {
 	return &SessionService{
 		repo:      repo,
@@ -62,14 +63,14 @@ func (service *SessionService) Login(ctx context.Context, email, password string
 	}
 
 	// 2. Normalize submitted email address
-	normalizedEmail := helpers.NormalizeEmail(email)
+	normalizedEmail := validate.NormalizeEmail(email)
 
 	// 3. Query repository for user account
 	user, err := service.repo.GetUserByEmail(ctx, normalizedEmail)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
 			// Side-channel defense: perform dummy bcrypt check to equalize timing profile
-			utils.DummyPasswordCompare(password)
+			hashing.DummyPasswordCompare(password)
 			return nil, autherr.ErrInvalidCredentials
 		}
 		return nil, err
@@ -77,12 +78,12 @@ func (service *SessionService) Login(ctx context.Context, email, password string
 
 	// 4. Reject accounts created via third-party OAuth providers that lack a password credential
 	if !user.PasswordHash.Valid {
-		utils.DummyPasswordCompare(password)
+		hashing.DummyPasswordCompare(password)
 		return nil, autherr.ErrOAuthAccount
 	}
 
 	// 5. Verify submitted password against stored bcrypt hash using constant-time check
-	if !utils.CheckPassword(user.PasswordHash.String, password) {
+	if !hashing.CheckPassword(user.PasswordHash.String, password) {
 		return nil, autherr.ErrInvalidCredentials
 	}
 
@@ -100,7 +101,7 @@ func (service *SessionService) Login(ctx context.Context, email, password string
 	}
 
 	// 8. Issue active session token pair (access token + refresh token)
-	return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
+	return issueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
 }
 
 // Refresh validates an existing refresh token and issues a fresh session pair.
@@ -122,7 +123,7 @@ func (service *SessionService) Login(ctx context.Context, email, password string
 // - (nil, ErrAccountSuspended / ErrAccountDeactivated): Account is locked.
 func (service *SessionService) Refresh(ctx context.Context, rawRefreshToken string) (*model.TokenPair, error) {
 	// 1. Compute SHA-256 hash of presented raw refresh token
-	tokenHash := utils.HashToken(rawRefreshToken)
+	tokenHash := token.HashToken(rawRefreshToken)
 
 	// 2. Fetch token record from repository
 	tokenRecord, err := service.repo.GetRefreshToken(ctx, tokenHash)
@@ -165,7 +166,7 @@ func (service *SessionService) Refresh(ctx context.Context, rawRefreshToken stri
 			return nil, err
 		}
 		// Issue a brand-new access token + refresh token pair
-		return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
+		return issueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
 	}
 
 	// 7. Non-rotating mode: issue new short-lived access token, reuse existing refresh token
@@ -189,7 +190,7 @@ func (service *SessionService) Refresh(ctx context.Context, rawRefreshToken stri
 // - Idempotent: returns nil without error if the token was already revoked or not found.
 func (service *SessionService) Logout(ctx context.Context, rawRefreshToken string) error {
 	// 1. Hash raw refresh token with SHA-256
-	tokenHash := utils.HashToken(rawRefreshToken)
+	tokenHash := token.HashToken(rawRefreshToken)
 
 	// 2. Look up token record
 	tokenRecord, err := service.repo.GetRefreshToken(ctx, tokenHash)
@@ -240,7 +241,7 @@ func (service *SessionService) OAuthLogin(ctx context.Context, providerName, idT
 		return nil, autherr.ErrOAuthTokenInvalid
 	}
 
-	normalizedEmail := helpers.NormalizeEmail(identity.Email)
+	normalizedEmail := validate.NormalizeEmail(identity.Email)
 
 	// 3. Check if OAuth connection already exists for this provider and subject ID
 	connection, err := service.repo.GetOAuthConnection(ctx, providerName, identity.ProviderID)
@@ -258,7 +259,7 @@ func (service *SessionService) OAuthLogin(ctx context.Context, providerName, idT
 			return nil, autherr.ErrAccountDeactivated
 		}
 		// Issue active session token pair
-		return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
+		return issueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, user.ID)
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
@@ -279,7 +280,7 @@ func (service *SessionService) OAuthLogin(ctx context.Context, providerName, idT
 			return nil, autherr.ErrAccountDeactivated
 		}
 		// Issue active session token pair
-		return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, existingUser.ID)
+		return issueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, existingUser.ID)
 	} else if !errors.Is(err, repository.ErrNotFound) {
 		return nil, err
 	}
@@ -326,5 +327,5 @@ func (service *SessionService) OAuthLogin(ctx context.Context, providerName, idT
 	}
 
 	// 9. Issue active session token pair (access + refresh)
-	return helpers.IssueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, newUser.ID)
+	return issueTokenPair(ctx, service.repo, service.jwtIssuer, service.config.Session, newUser.ID)
 }

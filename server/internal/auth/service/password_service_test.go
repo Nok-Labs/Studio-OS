@@ -10,10 +10,10 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
-	autherr "server/internal/auth/errors"
+	"server/internal/auth/autherr"
 	"server/internal/auth/repository"
-	"server/internal/auth/utils"
-	db "server/internal/db/generated"
+	"server/internal/auth/token"
+	db "server/internal/platform/db/generated"
 )
 
 func TestPasswordService_ForgotPassword(t *testing.T) {
@@ -156,7 +156,7 @@ func TestPasswordService_ResetPassword(t *testing.T) {
 		testUserID := uuid.New()
 		testOTPID := uuid.New()
 		rawCode := "888999"
-		codeHash := utils.HashToken(rawCode)
+		codeHash := token.HashToken(rawCode)
 
 		passwordUpdated := false
 		otpMarkedUsed := false
@@ -281,7 +281,7 @@ func TestPasswordService_ResetPassword(t *testing.T) {
 			return db.OtpCode{
 				ID:       testOTPID,
 				UserID:   testUserID,
-				CodeHash: utils.HashToken("111222"),
+				CodeHash: token.HashToken("111222"),
 				Attempts: 1,
 			}, nil
 		}

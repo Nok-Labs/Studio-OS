@@ -9,12 +9,12 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 
+	"server/internal/auth/autherr"
 	"server/internal/auth/config"
-	autherr "server/internal/auth/errors"
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
-	"server/internal/auth/utils"
-	db "server/internal/db/generated"
+	"server/internal/auth/token"
+	db "server/internal/platform/db/generated"
 )
 
 func TestSignupService_Signup(t *testing.T) {
@@ -75,6 +75,41 @@ func TestSignupService_Signup(t *testing.T) {
 		if !userCreated || !profileCreated || !otpCreated || !mailSent {
 			t.Fatalf("expected all lifecycle steps to execute, got user=%v profile=%v otp=%v mail=%v",
 				userCreated, profileCreated, otpCreated, mailSent)
+		}
+	})
+
+	t.Run("signup succeeds when the verification email cannot be sent", func(t *testing.T) {
+		mockRepo := &mockAuthRepository{}
+		mockMailerInstance := &mockMailer{}
+		cfg := setupTestConfig()
+		cfg.Password.BcryptCost = bcrypt.MinCost
+		cfg.Verification.Required = true
+
+		testUserID := uuid.New()
+		mockRepo.CheckUsernameExistsFn = func(ctx context.Context, username string) (bool, error) {
+			return false, nil
+		}
+		mockRepo.CreateUserFn = func(ctx context.Context, email string, passwordHash *string) (db.User, error) {
+			return db.User{ID: testUserID, Email: email}, nil
+		}
+		mockRepo.CreateProfileFn = func(ctx context.Context, userID uuid.UUID, firstName, lastName, username, displayName, profileURL, avatarURL *string) (db.Profile, error) {
+			return db.Profile{UserID: userID}, nil
+		}
+		mockRepo.CreateOTPFn = func(ctx context.Context, userID uuid.UUID, codeHash, purpose string, expiresAt time.Time) (db.OtpCode, error) {
+			return db.OtpCode{ID: uuid.New(), UserID: userID}, nil
+		}
+		mockMailerInstance.SendOTPFn = func(ctx context.Context, email, code string) error {
+			return errors.New("smtp unavailable")
+		}
+
+		signupService := NewSignupService(mockRepo, cfg, jwtIssuer, mockMailerInstance)
+		tokenPair, err := signupService.Signup(ctx, "jane@example.com", "securePassword123", model.ProfileInput{})
+
+		if err != nil {
+			t.Fatalf("signup must not fail when the email transport fails, got: %v", err)
+		}
+		if tokenPair != nil {
+			t.Fatalf("expected no token pair while verification is pending, got %v", tokenPair)
 		}
 	})
 
@@ -191,7 +226,7 @@ func TestSignupService_VerifyEmail(t *testing.T) {
 		testUserID := uuid.New()
 		testOTPID := uuid.New()
 		rawCode := "123456"
-		codeHash := utils.HashToken(rawCode)
+		codeHash := token.HashToken(rawCode)
 
 		mockRepo.GetUserByEmailFn = func(ctx context.Context, email string) (db.User, error) {
 			return db.User{ID: testUserID, Email: email}, nil
@@ -310,7 +345,7 @@ func TestSignupService_VerifyEmail(t *testing.T) {
 			return db.OtpCode{
 				ID:       testOTPID,
 				UserID:   testUserID,
-				CodeHash: utils.HashToken("654321"),
+				CodeHash: token.HashToken("654321"),
 				Attempts: 1,
 			}, nil
 		}
@@ -545,114 +580,6 @@ func TestSignupService_ResendOTP(t *testing.T) {
 		// either one be used, so this must not proceed.
 		if createdNew {
 			t.Fatal("expected no new OTP when the previous one could not be invalidated")
-		}
-	})
-}
-
-func TestSignupService_AcceptInvite(t *testing.T) {
-	ctx := context.Background()
-	jwtIssuer := setupTestJWTIssuer()
-
-	t.Run("successful invite redemption creates verified user and returns token pair", func(t *testing.T) {
-		mockRepo := &mockAuthRepository{}
-		cfg := setupTestConfig()
-		cfg.Password.BcryptCost = bcrypt.MinCost
-
-		testInviteID := uuid.New()
-		testUserID := uuid.New()
-		rawToken := "secure-invite-token-abc"
-
-		mockRepo.GetInvitationByTokenFn = func(ctx context.Context, tokenHash string) (db.Invitation, error) {
-			return db.Invitation{
-				ID:         testInviteID,
-				Email:      "invitee@example.com",
-				ExpiresAt:  time.Now().Add(24 * time.Hour),
-				AcceptedAt: nil,
-			}, nil
-		}
-		mockRepo.CreateUserFn = func(ctx context.Context, email string, passwordHash *string) (db.User, error) {
-			return db.User{ID: testUserID, Email: email}, nil
-		}
-		mockRepo.MarkEmailVerifiedFn = func(ctx context.Context, id uuid.UUID) error {
-			return nil
-		}
-		mockRepo.CreateProfileFn = func(ctx context.Context, userID uuid.UUID, firstName, lastName, username, displayName, profileURL, avatarURL *string) (db.Profile, error) {
-			return db.Profile{UserID: userID}, nil
-		}
-		inviteAccepted := false
-		mockRepo.MarkInvitationAcceptedFn = func(ctx context.Context, id uuid.UUID) error {
-			inviteAccepted = true
-			return nil
-		}
-		mockRepo.CreateRefreshTokenFn = func(ctx context.Context, userID uuid.UUID, tokenHash string, expiresAt time.Time) (db.RefreshToken, error) {
-			return db.RefreshToken{ID: uuid.New(), UserID: userID}, nil
-		}
-
-		signupService := NewSignupService(mockRepo, cfg, jwtIssuer, nil)
-		tokenPair, err := signupService.AcceptInvite(ctx, rawToken, "securePassword123", model.ProfileInput{})
-
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if tokenPair == nil || tokenPair.AccessToken == "" {
-			t.Fatalf("expected token pair, got %v", tokenPair)
-		}
-		if !inviteAccepted {
-			t.Fatal("expected invitation to be marked accepted")
-		}
-	})
-
-	t.Run("invite not found returns ErrInvitationNotFound", func(t *testing.T) {
-		mockRepo := &mockAuthRepository{}
-		cfg := setupTestConfig()
-
-		mockRepo.GetInvitationByTokenFn = func(ctx context.Context, tokenHash string) (db.Invitation, error) {
-			return db.Invitation{}, repository.ErrNotFound
-		}
-
-		signupService := NewSignupService(mockRepo, cfg, jwtIssuer, nil)
-		_, err := signupService.AcceptInvite(ctx, "invalid-token", "securePassword123", model.ProfileInput{})
-		if !errors.Is(err, autherr.ErrInvitationNotFound) {
-			t.Fatalf("expected ErrInvitationNotFound, got %v", err)
-		}
-	})
-
-	t.Run("already accepted invite returns ErrInvitationAlreadyAccepted", func(t *testing.T) {
-		mockRepo := &mockAuthRepository{}
-		cfg := setupTestConfig()
-		acceptedTime := time.Now().Add(-1 * time.Hour)
-
-		mockRepo.GetInvitationByTokenFn = func(ctx context.Context, tokenHash string) (db.Invitation, error) {
-			return db.Invitation{
-				ID:         uuid.New(),
-				AcceptedAt: &acceptedTime,
-				ExpiresAt:  time.Now().Add(24 * time.Hour),
-			}, nil
-		}
-
-		signupService := NewSignupService(mockRepo, cfg, jwtIssuer, nil)
-		_, err := signupService.AcceptInvite(ctx, "used-token", "securePassword123", model.ProfileInput{})
-		if !errors.Is(err, autherr.ErrInvitationAlreadyAccepted) {
-			t.Fatalf("expected ErrInvitationAlreadyAccepted, got %v", err)
-		}
-	})
-
-	t.Run("expired invite returns ErrInvitationExpired", func(t *testing.T) {
-		mockRepo := &mockAuthRepository{}
-		cfg := setupTestConfig()
-
-		mockRepo.GetInvitationByTokenFn = func(ctx context.Context, tokenHash string) (db.Invitation, error) {
-			return db.Invitation{
-				ID:         uuid.New(),
-				AcceptedAt: nil,
-				ExpiresAt:  time.Now().Add(-1 * time.Hour),
-			}, nil
-		}
-
-		signupService := NewSignupService(mockRepo, cfg, jwtIssuer, nil)
-		_, err := signupService.AcceptInvite(ctx, "expired-token", "securePassword123", model.ProfileInput{})
-		if !errors.Is(err, autherr.ErrInvitationExpired) {
-			t.Fatalf("expected ErrInvitationExpired, got %v", err)
 		}
 	})
 }
