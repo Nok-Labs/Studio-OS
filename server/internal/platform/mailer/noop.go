@@ -18,11 +18,6 @@ func (m *NoOpMailer) SendOTP(ctx context.Context, email, code string) error {
 	return nil
 }
 
-func (m *NoOpMailer) SendInvite(ctx context.Context, email, token string) error {
-	slog.Info("Simulating sending Invite email", "email", email, "token", token)
-	return nil
-}
-
 func (m *NoOpMailer) SendPasswordReset(ctx context.Context, email, code string) error {
 	slog.Info("Simulating sending Password Reset email", "email", email, "code", code)
 	return nil

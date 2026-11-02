@@ -40,7 +40,7 @@ func clearEnv(t *testing.T) {
 // for tests that vary one field at a time.
 func validEnv() map[string]string {
 	return map[string]string{
-		"DATABASE_URL":        "postgres://u:p@localhost:5432/studio_os?sslmode=disable",
+		"DATABASE_URL":        "postgres://u:p@localhost:5432/olona?sslmode=disable",
 		"JWT_SECRET":          strings.Repeat("k", 32),
 		"RESEND_API_KEY":      "re_test",
 		"RESEND_FROM_ADDRESS": "onboarding@resend.dev",
@@ -183,7 +183,7 @@ func TestLoadRequiresFromAddressOnlyWhenKeyIsPresent(t *testing.T) {
 	}
 }
 
-// TestLoadRejectsShortJWTSecret is the check slipwise's loader is missing:
+// TestLoadRejectsShortJWTSecret is the check a sibling service's loader is missing:
 // "required" alone lets a one-character secret through.
 func TestLoadRejectsShortJWTSecret(t *testing.T) {
 	clearEnv(t)
@@ -203,7 +203,7 @@ func TestLoadRejectsShortJWTSecret(t *testing.T) {
 func TestLoadRejectsCleartextAppBaseURL(t *testing.T) {
 	clearEnv(t)
 	env := validEnv()
-	env["APP_BASE_URL"] = "http://app.studio.example"
+	env["APP_BASE_URL"] = "http://app.olona.example"
 	setEnv(t, env)
 
 	_, err := Load()
@@ -247,14 +247,14 @@ func TestLoadDefaultsPortAndAppBaseURL(t *testing.T) {
 func TestLoadTrimsTrailingSlashFromAppBaseURL(t *testing.T) {
 	clearEnv(t)
 	env := validEnv()
-	env["APP_BASE_URL"] = "https://app.studio.example/"
+	env["APP_BASE_URL"] = "https://app.olona.example/"
 	setEnv(t, env)
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatalf("Load() = %v, want nil", err)
 	}
-	if cfg.AppBaseURL != "https://app.studio.example" {
+	if cfg.AppBaseURL != "https://app.olona.example" {
 		t.Fatalf("AppBaseURL = %q, want the trailing slash removed", cfg.AppBaseURL)
 	}
 }

@@ -78,26 +78,6 @@ func (m *SMTPMailer) SendOTP(ctx context.Context, email, code string) error {
 	return nil
 }
 
-// SendInvite sends an invitation link with a token to a new user.
-func (m *SMTPMailer) SendInvite(ctx context.Context, email, token string) error {
-	// The token is in the URL fragment (#token=) so it never reaches the
-	// server in the request line or an access log, and never appears in a
-	// Referer header. This matches the Resend mailer exactly.
-	inviteURL := fmt.Sprintf("%s/accept-invite#token=%s", m.appBaseURL, token)
-
-	subject := "You've been invited to join Studio OS"
-	body := fmt.Sprintf(
-		"<p>You have been invited to join Studio OS!</p>"+
-			"<p>Click the link below to set up your account:</p>"+
-			"<p><a href=\"%s\">Accept Invitation</a></p>", inviteURL)
-
-	if err := m.send(ctx, email, subject, body); err != nil {
-		slog.Error("Failed to send Invite email via SMTP", "email", email, "error", err)
-		return fmt.Errorf("failed to send Invite email: %w", err)
-	}
-	return nil
-}
-
 // SendPasswordReset sends a password reset code.
 func (m *SMTPMailer) SendPasswordReset(ctx context.Context, email, code string) error {
 	subject := "Password Reset Request"

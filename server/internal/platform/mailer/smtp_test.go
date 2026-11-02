@@ -343,25 +343,6 @@ func TestSMTPMailerUpgradesToSTARTTLSBeforeAuth(t *testing.T) {
 	}
 }
 
-func TestSMTPMailerSendInviteEmbedsTheConfiguredAppBaseURL(t *testing.T) {
-	m, received := startFakeSMTP(t)
-
-	if err := m.SendInvite(context.Background(), "dev@example.com", "tok-abc"); err != nil {
-		t.Fatalf("SendInvite() = %v, want nil", err)
-	}
-
-	msg := received().message
-	want := "https://app.example.com/accept-invite#token=tok-abc"
-	if !strings.Contains(msg, want) {
-		t.Errorf("message missing invite link %q\n---\n%s", want, msg)
-	}
-	// The fragment must survive into the href, otherwise the token is dropped
-	// and the acceptance page has nothing to redeem.
-	if !strings.Contains(msg, `href="https://app.example.com/accept-invite#token=tok-abc"`) {
-		t.Errorf("invite URL not in an href attribute\n---\n%s", msg)
-	}
-}
-
 func TestSMTPMailerDeliversAPasswordResetCode(t *testing.T) {
 	m, received := startFakeSMTP(t)
 
