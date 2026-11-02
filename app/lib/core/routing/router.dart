@@ -64,12 +64,17 @@ GoRouter router(Ref ref) {
         '/verify-otp',
         '/forgot-password',
         '/reset-password',
+        '/404',
       ].contains(state.uri.path);
 
-      // If users is not logged in, and user is not on a public route, kick them to
-      // the get started screen
+      // If users is not logged in, only redirect known protected routes to register.
+      // Unrecognized routes return null so GoRouter's errorBuilder renders the 404 page.
       if (!isLoggedIn && !isAuthRoute) {
-        return '/register';
+        const knownProtectedRoutes = ['/', '/home', '/dashboard', '/settings', '/set-username'];
+        if (knownProtectedRoutes.contains(state.uri.path)) {
+          return '/register';
+        }
+        return null;
       }
 
       // We check the value of isLoggedIn and check if there is a user saved in state
@@ -131,6 +136,11 @@ GoRouter router(Ref ref) {
               '';
           return ResetPasswordScreen(email: email);
         },
+      ),
+      GoRoute(
+        path: '/404',
+        name: 'not-found',
+        builder: (context, state) => NotFoundScreen(uri: state.uri),
       ),
     ],
   );
