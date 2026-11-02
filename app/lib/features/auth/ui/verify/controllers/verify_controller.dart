@@ -30,9 +30,6 @@ class VerifyController extends _$VerifyController {
   Future<void> resendOtp(String email) async {
     final repo = ref.read(authRepositoryProvider);
     final result = await repo.resendOtp(ResendOtpRequest(email: email));
-    result.fold(
-      ifLeft: (failure) => throw failure,
-      ifRight: (_) => null,
-    );
+    result.fold(ifLeft: (failure) => throw failure, ifRight: (_) => null);
   }
 }

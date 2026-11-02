@@ -23,8 +23,8 @@ class ResetPasswordScreen extends HookConsumerWidget {
     final targetEmail = email.isNotEmpty
         ? email
         : storedEmail.isNotEmpty
-            ? storedEmail
-            : 'your email address';
+        ? storedEmail
+        : 'your email address';
 
     // Step state: 0 = Enter 6-digit code, 1 = Create new password
     final currentStep = useState<int>(0);
@@ -39,7 +39,10 @@ class ResetPasswordScreen extends HookConsumerWidget {
     final formKey = useMemoized(() => GlobalKey<ShadFormState>());
 
     // LISTEN for reset password outcome
-    ref.listen<AsyncValue<void>>(resetPasswordControllerProvider, (previous, next) {
+    ref.listen<AsyncValue<void>>(resetPasswordControllerProvider, (
+      previous,
+      next,
+    ) {
       next.whenOrNull(
         error: (error, _) {
           context.showFailureToast(error);
@@ -47,7 +50,8 @@ class ResetPasswordScreen extends HookConsumerWidget {
         data: (_) {
           context.showSuccessToast(
             title: 'Password Reset',
-            description: 'Your password has been updated. Please sign in with your new password.',
+            description:
+                'Your password has been updated. Please sign in with your new password.',
           );
           context.goNamed('login');
         },
@@ -246,7 +250,9 @@ class ResetPasswordScreen extends HookConsumerWidget {
     void onSubmit() async {
       if (formKey.currentState?.saveAndValidate() ?? false) {
         final code = otpController.text.replaceAll(RegExp(r'\s+'), '');
-        await ref.read(resetPasswordControllerProvider.notifier).resetPassword(
+        await ref
+            .read(resetPasswordControllerProvider.notifier)
+            .resetPassword(
               email: targetEmail,
               code: code,
               password: passwordController.text,
@@ -270,10 +276,7 @@ class ResetPasswordScreen extends HookConsumerWidget {
                   label: const Text('New Password'),
                   controller: passwordController,
                   obscureText: passwordIsObscured.value,
-                  placeholder: Text(
-                    '••••••••',
-                    style: shad.textTheme.muted,
-                  ),
+                  placeholder: Text('••••••••', style: shad.textTheme.muted),
                   enabled: !isLoading,
                   trailing: ShadIconButton.ghost(
                     width: 24,
@@ -308,10 +311,7 @@ class ResetPasswordScreen extends HookConsumerWidget {
                   label: const Text('Confirm Password'),
                   controller: confirmPasswordController,
                   obscureText: confirmPasswordIsObscured.value,
-                  placeholder: Text(
-                    '••••••••',
-                    style: shad.textTheme.muted,
-                  ),
+                  placeholder: Text('••••••••', style: shad.textTheme.muted),
                   enabled: !isLoading,
                   trailing: ShadIconButton.ghost(
                     width: 24,

@@ -16,9 +16,7 @@ class AuthResponsiveLayout extends StatelessWidget {
         builder: (context, constraints) {
           return SingleChildScrollView(
             child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: constraints.maxHeight,
-              ),
+              constraints: BoxConstraints(minHeight: constraints.maxHeight),
               child: IntrinsicHeight(
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
@@ -64,30 +62,21 @@ class AuthResponsiveLayout extends StatelessWidget {
                 onTap: () {},
                 child: Text(
                   'Privacy Policy',
-                  style: TextStyle(
-                    color: scheme.mutedForeground,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: scheme.mutedForeground, fontSize: 12),
                 ),
               ),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   '•',
-                  style: TextStyle(
-                    color: scheme.mutedForeground,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: scheme.mutedForeground, fontSize: 12),
                 ),
               ),
               InkWell(
                 onTap: () {},
                 child: Text(
                   'Terms of Service',
-                  style: TextStyle(
-                    color: scheme.mutedForeground,
-                    fontSize: 12,
-                  ),
+                  style: TextStyle(color: scheme.mutedForeground, fontSize: 12),
                 ),
               ),
             ],
@@ -95,10 +84,7 @@ class AuthResponsiveLayout extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             '© 2026 Studio OS. All rights reserved.',
-            style: TextStyle(
-              color: scheme.mutedForeground,
-              fontSize: 12,
-            ),
+            style: TextStyle(color: scheme.mutedForeground, fontSize: 12),
           ),
         ],
       ),

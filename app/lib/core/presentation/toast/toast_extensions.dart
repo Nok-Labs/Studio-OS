@@ -79,11 +79,7 @@ extension AppToastContextExtension on BuildContext {
     final actions = <ToastAction>[];
     if (onRetry != null) {
       actions.add(
-        ToastAction(
-          label: 'Retry',
-          isPrimary: true,
-          onPressed: onRetry,
-        ),
+        ToastAction(label: 'Retry', isPrimary: true, onPressed: onRetry),
       );
     }
     if (onDismissAction != null) {
@@ -106,10 +102,7 @@ extension AppToastContextExtension on BuildContext {
   }
 
   /// Map any error or [Failure] into conversational, human-friendly UX copy.
-  void showFailureToast(
-    Object error, {
-    VoidCallback? onRetry,
-  }) {
+  void showFailureToast(Object error, {VoidCallback? onRetry}) {
     final errorView = AppErrorView.from(error);
     showErrorToast(
       title: errorView.title,

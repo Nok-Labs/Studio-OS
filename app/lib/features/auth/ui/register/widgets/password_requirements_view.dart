@@ -1,14 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:studio_os/core/constants/constants.dart';
+import 'package:studio_os/core/theme/color_scheme.dart';
 import 'package:studio_os/core/utils/validators.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class PasswordRequirementsView extends HookWidget {
-  const PasswordRequirementsView({
-    super.key,
-    required this.controller,
-  });
+  const PasswordRequirementsView({super.key, required this.controller});
 
   final TextEditingController controller;
 
@@ -74,7 +72,7 @@ class PasswordRequirementsView extends HookWidget {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           color: isMet
-                              ? shad.colorScheme.primary.withValues(alpha: 0.15)
+                              ? shad.colorScheme.successSurface
                               : shad.colorScheme.muted,
                         ),
                         child: Center(
@@ -82,7 +80,7 @@ class PasswordRequirementsView extends HookWidget {
                             isMet ? LucideIcons.check : LucideIcons.circle,
                             size: 10,
                             color: isMet
-                                ? shad.colorScheme.primary
+                                ? shad.colorScheme.success
                                 : shad.colorScheme.mutedForeground,
                           ),
                         ),

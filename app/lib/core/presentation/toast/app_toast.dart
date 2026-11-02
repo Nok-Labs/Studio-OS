@@ -3,12 +3,7 @@ import 'package:studio_os/core/constants/constants.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 /// The four semantic notification variants.
-enum ToastType {
-  success,
-  info,
-  error,
-  warning,
-}
+enum ToastType { success, info, error, warning }
 
 /// Action item displayed in an [AppToast].
 class ToastAction {
@@ -83,7 +78,8 @@ class AppToast extends StatelessWidget {
     final baseCardColor = scheme.card;
     final borderColor = scheme.border;
 
-    final hasDescription = description != null && description!.trim().isNotEmpty;
+    final hasDescription =
+        description != null && description!.trim().isNotEmpty;
     final hasActions = actions != null && actions!.isNotEmpty;
 
     return ConstrainedBox(
@@ -142,11 +138,7 @@ class AppToast extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       // Leading status icon
-                      Icon(
-                        _getIcon(),
-                        size: 20,
-                        color: semanticColor,
-                      ),
+                      Icon(_getIcon(), size: 20, color: semanticColor),
                       const SizedBox(width: UIConstants.sm),
 
                       // Title in the same row

@@ -122,7 +122,8 @@ GoRouter router(Ref ref) {
         path: '/reset-password',
         name: 'reset-password',
         builder: (context, state) {
-          final email = (state.extra as String?) ??
+          final email =
+              (state.extra as String?) ??
               state.uri.queryParameters['email'] ??
               '';
           return ResetPasswordScreen(email: email);

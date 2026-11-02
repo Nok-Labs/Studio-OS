@@ -49,12 +49,18 @@ Failure mapDioException(DioException e) {
   return switch (e.type) {
     DioExceptionType.connectionTimeout ||
     DioExceptionType.receiveTimeout ||
-    DioExceptionType.sendTimeout =>
-      const Failure(code: 'timeout', message: 'The request timed out.'),
-    DioExceptionType.connectionError =>
-      const Failure(code: 'network', message: 'Please check your connection.'),
-    DioExceptionType.cancel =>
-      const Failure(code: 'cancelled', message: 'Request was cancelled.'),
+    DioExceptionType.sendTimeout => const Failure(
+      code: 'timeout',
+      message: 'The request timed out.',
+    ),
+    DioExceptionType.connectionError => const Failure(
+      code: 'network',
+      message: 'Please check your connection.',
+    ),
+    DioExceptionType.cancel => const Failure(
+      code: 'cancelled',
+      message: 'Request was cancelled.',
+    ),
     _ => const Failure(code: 'unexpected', message: 'Something went wrong.'),
   };
 }

@@ -10,11 +10,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    await tester.pumpWidget(
-      const ProviderScope(
-        child: MainApp(),
-      ),
-    );
+    await tester.pumpWidget(const ProviderScope(child: MainApp()));
 
     await tester.pump();
     expect(find.byType(MainApp), findsOneWidget);

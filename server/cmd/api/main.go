@@ -132,7 +132,7 @@ func main() {
 		Verification: authconfig.VerificationConfig{
 			Required:       true,
 			OTPTTL:         10 * time.Minute,
-			MaxOTPAttempts: 5,
+			MaxOTPAttempts: 3,
 			ResendCooldown: 60 * time.Second,
 		},
 		Session: authconfig.SessionConfig{
