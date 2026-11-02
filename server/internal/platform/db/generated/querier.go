@@ -30,7 +30,6 @@ type Querier interface {
 	// USER
 	// ===================================
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	DeactivateUser(ctx context.Context, id uuid.UUID) error
 	DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) error
 	DeleteOTP(ctx context.Context, id uuid.UUID) error
 	DeleteProfile(ctx context.Context, userID uuid.UUID) error
@@ -53,8 +52,6 @@ type Querier interface {
 	MarkOTPUsed(ctx context.Context, id uuid.UUID) error
 	RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, id uuid.UUID) error
-	SuspendUser(ctx context.Context, id uuid.UUID) error
-	UnsuspendUser(ctx context.Context, id uuid.UUID) error
 	UpdateProfile(ctx context.Context, arg UpdateProfileParams) (Profile, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 }

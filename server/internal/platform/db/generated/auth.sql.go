@@ -206,17 +206,6 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 	return i, err
 }
 
-const deactivateUser = `-- name: DeactivateUser :exec
-UPDATE users
-SET is_deactivated = true
-WHERE id = $1
-`
-
-func (q *Queries) DeactivateUser(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deactivateUser, id)
-	return err
-}
-
 const deleteOAuthConnection = `-- name: DeleteOAuthConnection :exec
 DELETE FROM oauth_connections
 WHERE user_id = $1 AND provider = $2
@@ -549,28 +538,6 @@ WHERE id = $1 AND revoked_at IS NULL
 
 func (q *Queries) RevokeRefreshToken(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, revokeRefreshToken, id)
-	return err
-}
-
-const suspendUser = `-- name: SuspendUser :exec
-UPDATE users
-SET is_suspended = true
-WHERE id = $1
-`
-
-func (q *Queries) SuspendUser(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, suspendUser, id)
-	return err
-}
-
-const unsuspendUser = `-- name: UnsuspendUser :exec
-UPDATE users
-SET is_suspended = false
-WHERE id = $1
-`
-
-func (q *Queries) UnsuspendUser(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, unsuspendUser, id)
 	return err
 }
 
