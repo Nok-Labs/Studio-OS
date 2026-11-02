@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:studio_os/core/presentation/not_found_screen.dart';
 import 'package:studio_os/core/storage/secure_storage.dart';
 import 'package:studio_os/features/auth/ui/login/login_screen.dart';
 import 'package:studio_os/features/auth/ui/register/register_screen.dart';
@@ -27,6 +28,7 @@ GoRouter router(Ref ref) {
     // Initial location is always splash due to a useEffect trigger that was
     // defined there which works in tandem with our redirect logic
     initialLocation: '/login',
+    errorBuilder: (context, state) => NotFoundScreen(uri: state.uri),
 
     // Le redirect logic
     redirect: (context, state) async {
