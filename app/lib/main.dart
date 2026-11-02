@@ -2,13 +2,20 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:studio_os/core/routing/router.dart';
+import 'package:studio_os/core/theme/app_theme.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'core/theme/app_theme.dart';
-// import 'package:firebase_core/firebase_core.dart';
 
-// Helper to safely open Hive box with corruption recovery
+// Not yet enabled — re-add these alongside the initialization block below
+// when Hive and Firebase are switched on. Leaving them imported while unused
+// fails `flutter analyze --fatal-infos` in CI.
+// import 'package:firebase_core/firebase_core.dart';
+// import 'package:google_fonts/google_fonts.dart';
+
+//===================================
+// STORAGE HELPERS
+//===================================
 /*Future<void> _safeOpenBox<T>(String boxName) async {
   try {
     if (!Hive.isBoxOpen(boxName)) {
@@ -24,6 +31,9 @@ import 'core/theme/app_theme.dart';
   }
 }*/
 
+//===================================
+// APP ENTRY POINT
+//===================================
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   /*
@@ -50,19 +60,34 @@ Future<void> main() async {
   );
 }
 
+//===================================
+// ROOT WIDGET
+//===================================
 class MainApp extends ConsumerWidget {
   const MainApp({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // final router = ref.watch(appRouterProvider);
+    final router = ref.watch(routerProvider);
 
     return ShadApp.router(
-      title: 'Studio OS',
+      title: 'Studio',
       debugShowCheckedModeBanner: true,
+
+      //===================================
+      // THEME INJECTION
+      //===================================
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-      // routerConfig: router,
+
+      //===================================
+      // ROUTING
+      //===================================
+      routerConfig: router,
+
+      //===================================
+      // SYSTEM UI CONFIG
+      //===================================
       builder: (context, child) {
         final brightness = Theme.of(context).brightness;
         SystemChrome.setSystemUIOverlayStyle(
