@@ -2,7 +2,7 @@
 
 # Where sqlc/swag write generated code — kept as vars so a path change
 # only needs updating in one place.
-SQLC_OUT   := internal/db/generated
+SQLC_OUT   := internal/platform/db/generated
 DOCS_OUT   := docs
 BINARY_OUT := bin/api
 MAIN_PKG   := ./cmd/api
