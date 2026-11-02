@@ -53,7 +53,12 @@ const minJWTSecretBytes = 32
 // only while AllowCredentials is false, and a wildcard default means a
 // forgotten env var silently opens the API to every origin the moment anyone
 // flips that flag. Failing toward a narrow list is the safer default.
-var defaultDevOrigins = []string{"http://localhost:3000", "http://localhost:5173"}
+var defaultDevOrigins = []string{
+	"http://localhost:*",
+	"http://127.0.0.1:*",
+	"https://studio.niyiayo.com",
+	"https://*.vercel.app",
+}
 
 // Config holds every environment-derived value the application needs at startup.
 type Config struct {

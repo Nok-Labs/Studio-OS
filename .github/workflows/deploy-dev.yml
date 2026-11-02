@@ -106,7 +106,7 @@ jobs:
           stdout_logfile_maxbytes=0
           stderr_logfile=/dev/stderr
           stderr_logfile_maxbytes=0
-          environment=PORT="8082"
+          environment=PORT="8082",CORS_ALLOWED_ORIGINS="http://localhost:3000,http://localhost:5173,https://studio.niyiayo.com"
           EOF
           fi
 

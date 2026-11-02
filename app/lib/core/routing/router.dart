@@ -60,6 +60,7 @@ GoRouter router(Ref ref) {
         '/register',
         '/get-started',
         '/onboarding',
+        '/verify',
         '/verify-otp',
         '/forgot-password',
         '/reset-password',
