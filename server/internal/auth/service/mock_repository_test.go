@@ -11,8 +11,8 @@ import (
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
 	"server/internal/auth/service/oauth"
-	"server/internal/auth/utils"
-	db "server/internal/db/generated"
+	"server/internal/auth/token"
+	db "server/internal/platform/db/generated"
 )
 
 // mockAuthRepository is a test double that satisfies repository.AuthRepository.
@@ -23,9 +23,6 @@ type mockAuthRepository struct {
 	GetUserByEmailFn     func(ctx context.Context, email string) (db.User, error)
 	UpdateUserPasswordFn func(ctx context.Context, id uuid.UUID, passwordHash *string) error
 	MarkEmailVerifiedFn  func(ctx context.Context, id uuid.UUID) error
-	SuspendUserFn        func(ctx context.Context, id uuid.UUID) error
-	UnsuspendUserFn      func(ctx context.Context, id uuid.UUID) error
-	DeactivateUserFn     func(ctx context.Context, id uuid.UUID) error
 	DeleteUserFn         func(ctx context.Context, id uuid.UUID) error
 
 	// Profile
@@ -56,13 +53,6 @@ type mockAuthRepository struct {
 	IncrementOTPAttemptsFn func(ctx context.Context, id uuid.UUID) (int32, error)
 	MarkOTPUsedFn          func(ctx context.Context, id uuid.UUID) error
 	DeleteOTPFn            func(ctx context.Context, id uuid.UUID) error
-
-	// Invitations
-	CreateInvitationFn       func(ctx context.Context, email, tokenHash string, invitedBy uuid.UUID, expiresAt time.Time) (db.Invitation, error)
-	GetInvitationByIDFn      func(ctx context.Context, id uuid.UUID) (db.Invitation, error)
-	GetInvitationByTokenFn   func(ctx context.Context, tokenHash string) (db.Invitation, error)
-	MarkInvitationAcceptedFn func(ctx context.Context, id uuid.UUID) error
-	DeleteInvitationFn       func(ctx context.Context, id uuid.UUID) error
 
 	// Transactions
 	// WithTxHookFn overrides the default WithTx behaviour so a test can
@@ -105,27 +95,6 @@ func (mock *mockAuthRepository) MarkEmailVerified(ctx context.Context, id uuid.U
 		return mock.MarkEmailVerifiedFn(ctx, id)
 	}
 	return errors.New("MarkEmailVerified not implemented")
-}
-
-func (mock *mockAuthRepository) SuspendUser(ctx context.Context, id uuid.UUID) error {
-	if mock.SuspendUserFn != nil {
-		return mock.SuspendUserFn(ctx, id)
-	}
-	return errors.New("SuspendUser not implemented")
-}
-
-func (mock *mockAuthRepository) UnsuspendUser(ctx context.Context, id uuid.UUID) error {
-	if mock.UnsuspendUserFn != nil {
-		return mock.UnsuspendUserFn(ctx, id)
-	}
-	return errors.New("UnsuspendUser not implemented")
-}
-
-func (mock *mockAuthRepository) DeactivateUser(ctx context.Context, id uuid.UUID) error {
-	if mock.DeactivateUserFn != nil {
-		return mock.DeactivateUserFn(ctx, id)
-	}
-	return errors.New("DeactivateUser not implemented")
 }
 
 func (mock *mockAuthRepository) DeleteUser(ctx context.Context, id uuid.UUID) error {
@@ -286,42 +255,6 @@ func (mock *mockAuthRepository) DeleteOTP(ctx context.Context, id uuid.UUID) err
 	return errors.New("DeleteOTP not implemented")
 }
 
-// Invitation implementations
-func (mock *mockAuthRepository) CreateInvitation(ctx context.Context, email, tokenHash string, invitedBy uuid.UUID, expiresAt time.Time) (db.Invitation, error) {
-	if mock.CreateInvitationFn != nil {
-		return mock.CreateInvitationFn(ctx, email, tokenHash, invitedBy, expiresAt)
-	}
-	return db.Invitation{}, errors.New("CreateInvitation not implemented")
-}
-
-func (mock *mockAuthRepository) GetInvitationByID(ctx context.Context, id uuid.UUID) (db.Invitation, error) {
-	if mock.GetInvitationByIDFn != nil {
-		return mock.GetInvitationByIDFn(ctx, id)
-	}
-	return db.Invitation{}, errors.New("GetInvitationByID not implemented")
-}
-
-func (mock *mockAuthRepository) GetInvitationByToken(ctx context.Context, tokenHash string) (db.Invitation, error) {
-	if mock.GetInvitationByTokenFn != nil {
-		return mock.GetInvitationByTokenFn(ctx, tokenHash)
-	}
-	return db.Invitation{}, errors.New("GetInvitationByToken not implemented")
-}
-
-func (mock *mockAuthRepository) MarkInvitationAccepted(ctx context.Context, id uuid.UUID) error {
-	if mock.MarkInvitationAcceptedFn != nil {
-		return mock.MarkInvitationAcceptedFn(ctx, id)
-	}
-	return errors.New("MarkInvitationAccepted not implemented")
-}
-
-func (mock *mockAuthRepository) DeleteInvitation(ctx context.Context, id uuid.UUID) error {
-	if mock.DeleteInvitationFn != nil {
-		return mock.DeleteInvitationFn(ctx, id)
-	}
-	return errors.New("DeleteInvitation not implemented")
-}
-
 // WithTx runs fn and returns its error, as a committed transaction would.
 //
 // Defaulting to the mock itself keeps existing tests working without having to
@@ -382,8 +315,8 @@ func (mock *mockOAuthProvider) VerifyToken(ctx context.Context, idToken string) 
 var _ oauth.Provider = (*mockOAuthProvider)(nil)
 
 // helper to setup a test JWTIssuer
-func setupTestJWTIssuer() *utils.JWTIssuer {
-	return utils.NewJWTIssuer("test-super-secret-key-32-chars-long!")
+func setupTestJWTIssuer() *token.JWTIssuer {
+	return token.NewJWTIssuer("test-super-secret-key-32-chars-long!")
 }
 
 // helper to setup default AuthConfig

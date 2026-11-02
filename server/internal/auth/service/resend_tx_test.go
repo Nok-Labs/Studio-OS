@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	autherr "server/internal/auth/errors"
+	"server/internal/auth/autherr"
 	"server/internal/auth/repository"
-	db "server/internal/db/generated"
+	db "server/internal/platform/db/generated"
 )
 
 // These tests pin the transaction boundary on the OTP *issue* paths —

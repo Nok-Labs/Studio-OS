@@ -9,10 +9,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	autherr "server/internal/auth/errors"
+	"server/internal/auth/autherr"
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
-	db "server/internal/db/generated"
+	db "server/internal/platform/db/generated"
 )
 
 func TestProfileService_GetProfile(t *testing.T) {
@@ -270,5 +270,28 @@ func TestProfileService_DeleteProfile(t *testing.T) {
 	}
 	if !deleted {
 		t.Fatal("expected DeleteProfile to be called")
+	}
+}
+
+func TestProfileService_DeleteAccount(t *testing.T) {
+	ctx := context.Background()
+	mockRepo := &mockAuthRepository{}
+	cfg := setupTestConfig()
+	testUserID := uuid.New()
+	deleted := false
+
+	mockRepo.DeleteUserFn = func(ctx context.Context, userID uuid.UUID) error {
+		if userID == testUserID {
+			deleted = true
+		}
+		return nil
+	}
+
+	profileService := NewProfileService(mockRepo, cfg)
+	if err := profileService.DeleteAccount(ctx, testUserID); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !deleted {
+		t.Fatal("expected DeleteUser to be called")
 	}
 }

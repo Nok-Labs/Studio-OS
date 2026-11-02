@@ -3,8 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
+import 'package:studio_os/core/routing/router.dart';
+import 'package:studio_os/core/theme/app_theme.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
-import 'core/theme/app_theme.dart';
 
 // Not yet enabled — re-add these alongside the initialization block below
 // when Hive and Firebase are switched on. Leaving them imported while unused
@@ -67,10 +68,10 @@ class MainApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // final router = ref.watch(appRouterProvider);
+    final router = ref.watch(routerProvider);
 
     return ShadApp.router(
-      title: 'Studio OS',
+      title: 'Studio',
       debugShowCheckedModeBanner: true,
 
       //===================================
@@ -82,7 +83,7 @@ class MainApp extends ConsumerWidget {
       //===================================
       // ROUTING
       //===================================
-      // routerConfig: router,
+      routerConfig: router,
 
       //===================================
       // SYSTEM UI CONFIG

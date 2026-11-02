@@ -25,21 +25,6 @@ UPDATE users
 SET email_verified_at = now()
 WHERE id = $1;
 
--- name: SuspendUser :exec
-UPDATE users
-SET is_suspended = true
-WHERE id = $1;
-
--- name: UnsuspendUser :exec
-UPDATE users
-SET is_suspended = false
-WHERE id = $1;
-
--- name: DeactivateUser :exec
-UPDATE users
-SET is_deactivated = true
-WHERE id = $1;
-
 -- name: DeleteUser :exec
 DELETE FROM users
 WHERE id = $1;
@@ -174,30 +159,4 @@ WHERE id = $1;
 
 -- name: DeleteOTP :exec
 DELETE FROM otp_codes
-WHERE id = $1;
-
--- ===================================
--- INVITATIONS
--- ===================================
-
--- name: CreateInvitation :one
-INSERT INTO invitations (email, token_hash, invited_by, expires_at)
-VALUES ($1, $2, $3, $4)
-RETURNING *;
-
--- name: GetInvitationByID :one
-SELECT * FROM invitations
-WHERE id = $1;
-
--- name: GetInvitationByToken :one
-SELECT * FROM invitations
-WHERE token_hash = $1 AND accepted_at IS NULL AND expires_at > now();
-
--- name: MarkInvitationAccepted :exec
-UPDATE invitations
-SET accepted_at = now()
-WHERE id = $1;
-
--- name: DeleteInvitation :exec
-DELETE FROM invitations
 WHERE id = $1;

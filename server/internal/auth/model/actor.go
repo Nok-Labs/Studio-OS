@@ -4,7 +4,7 @@ import "github.com/google/uuid"
 
 type Actor struct {
 	UserID        uuid.UUID
-	Role          Role
+	Email         string
 	IsSuspended   bool
 	IsDeactivated bool
 }

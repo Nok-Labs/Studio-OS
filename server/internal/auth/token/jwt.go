@@ -1,0 +1,64 @@
+// Package token issues and validates the auth domain's tokens: signed JWTs,
+// opaque refresh tokens, and numeric OTPs.
+package token
+
+import (
+	"errors"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+)
+
+// ErrInvalidToken is returned when a token is malformed, expired, forged, or has an invalid signature.
+var ErrInvalidToken = errors.New("invalid or expired token")
+
+// Claims represents the JWT payload.
+type Claims struct {
+	UserID uuid.UUID `json:"user_id"`
+	jwt.RegisteredClaims
+}
+
+// JWTIssuer handles signing and verifying HS256 JWTs.
+type JWTIssuer struct {
+	secret []byte
+}
+
+// NewJWTIssuer creates a new token issuer with the provided secret.
+func NewJWTIssuer(secret string) *JWTIssuer {
+	return &JWTIssuer{secret: []byte(secret)}
+}
+
+// Issue generates a signed JWT with a configurable TTL.
+func (issuer *JWTIssuer) Issue(userID uuid.UUID, ttl time.Duration) (string, error) {
+	claims := Claims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(ttl)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(issuer.secret)
+}
+
+// Validate checks the signature and expiration of a JWT string.
+func (issuer *JWTIssuer) Validate(tokenString string) (*Claims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &Claims{}, func(token *jwt.Token) (interface{}, error) {
+		// Pin the algorithm. Accepting any HMAC method would let a token signed
+		// with HS384/HS512 through a verifier configured for HS256, which is not
+		// the contract we issue under.
+		if token.Method != jwt.SigningMethodHS256 {
+			return nil, ErrInvalidToken
+		}
+		return issuer.secret, nil
+	})
+	if err != nil || !token.Valid {
+		return nil, ErrInvalidToken
+	}
+	claims, ok := token.Claims.(*Claims)
+	if !ok {
+		return nil, ErrInvalidToken
+	}
+	return claims, nil
+}

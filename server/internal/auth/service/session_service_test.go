@@ -10,11 +10,11 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"golang.org/x/crypto/bcrypt"
 
+	"server/internal/auth/autherr"
 	"server/internal/auth/config"
-	autherr "server/internal/auth/errors"
 	"server/internal/auth/repository"
 	"server/internal/auth/service/oauth"
-	db "server/internal/db/generated"
+	db "server/internal/platform/db/generated"
 )
 
 func TestSessionService_Login(t *testing.T) {

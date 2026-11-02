@@ -7,12 +7,13 @@ import (
 
 	"github.com/google/uuid"
 
+	"server/internal/auth/autherr"
 	"server/internal/auth/config"
-	autherr "server/internal/auth/errors"
+	"server/internal/auth/hashing"
 	"server/internal/auth/model"
 	"server/internal/auth/repository"
-	"server/internal/auth/service/helpers"
-	"server/internal/auth/utils"
+	"server/internal/auth/token"
+	"server/internal/auth/validate"
 )
 
 // PasswordService handles password reset requests, reset confirmations, and password changes.
@@ -52,7 +53,7 @@ func NewPasswordService(
 // Returns ErrOTPCooldown if a code was requested too recently.
 func (service *PasswordService) ForgotPassword(ctx context.Context, email string) error {
 	// 1. Normalize email address (lowercase and trim whitespace)
-	normalizedEmail := helpers.NormalizeEmail(email)
+	normalizedEmail := validate.NormalizeEmail(email)
 
 	// 2. Look up user by email; return nil silently on ErrNotFound to mitigate account enumeration
 	user, err := service.repo.GetUserByEmail(ctx, normalizedEmail)
@@ -84,11 +85,11 @@ func (service *PasswordService) ForgotPassword(ctx context.Context, email string
 	//
 	// The code is generated before the transaction opens since it is pure
 	// computation, which keeps the lock window as short as possible.
-	newCode, err := utils.GenerateOTP()
+	newCode, err := token.GenerateOTP()
 	if err != nil {
 		return err
 	}
-	newHash := utils.HashToken(newCode)
+	newHash := token.HashToken(newCode)
 	expiresAt := time.Now().Add(service.config.Verification.OTPTTL)
 
 	// Captured rather than returned from fn so a cooldown rejection still lets
@@ -152,11 +153,11 @@ func (service *PasswordService) ForgotPassword(ctx context.Context, email string
 // - ErrAccountSuspended / ErrAccountDeactivated if account is locked.
 func (service *PasswordService) ResetPassword(ctx context.Context, email, code, newPassword string) error {
 	// 1. Validate password policy constraints
-	if err := helpers.ValidatePassword(newPassword, service.config.Password.MinLength); err != nil {
+	if err := validate.ValidatePassword(newPassword, service.config.Password.MinLength); err != nil {
 		return err
 	}
 
-	normalizedEmail := helpers.NormalizeEmail(email)
+	normalizedEmail := validate.NormalizeEmail(email)
 
 	// 2. Fetch target user
 	user, err := service.repo.GetUserByEmail(ctx, normalizedEmail)
@@ -179,7 +180,7 @@ func (service *PasswordService) ResetPassword(ctx context.Context, email, code, 
 	// configured cost takes ~260ms, and the transaction below holds a row lock
 	// that concurrent reset attempts block on. Hashing inside would make every
 	// competing request wait out our key-stretching.
-	hashedPassword, err := utils.HashPassword(newPassword, service.config.Password.BcryptCost)
+	hashedPassword, err := hashing.HashPassword(newPassword, service.config.Password.BcryptCost)
 	if err != nil {
 		return err
 	}
@@ -212,7 +213,7 @@ func (service *PasswordService) ResetPassword(ctx context.Context, email, code, 
 			return nil
 		}
 
-		if utils.HashToken(code) != otpRecord.CodeHash {
+		if token.HashToken(code) != otpRecord.CodeHash {
 			if _, err := txRepo.IncrementOTPAttempts(ctx, otpRecord.ID); err != nil {
 				return err
 			}
@@ -265,7 +266,7 @@ func (service *PasswordService) ResetPassword(ctx context.Context, email, code, 
 // - ErrPasswordSame if newPassword is identical to oldPassword.
 func (service *PasswordService) ChangePassword(ctx context.Context, userID uuid.UUID, oldPassword, newPassword string) error {
 	// 1. Validate new password length constraints
-	if err := helpers.ValidatePassword(newPassword, service.config.Password.MinLength); err != nil {
+	if err := validate.ValidatePassword(newPassword, service.config.Password.MinLength); err != nil {
 		return err
 	}
 
@@ -281,7 +282,7 @@ func (service *PasswordService) ChangePassword(ctx context.Context, userID uuid.
 	}
 
 	// 4. Verify existing password with constant-time bcrypt comparison
-	if !utils.CheckPassword(user.PasswordHash.String, oldPassword) {
+	if !hashing.CheckPassword(user.PasswordHash.String, oldPassword) {
 		return autherr.ErrInvalidCredentials
 	}
 
@@ -291,7 +292,7 @@ func (service *PasswordService) ChangePassword(ctx context.Context, userID uuid.
 	}
 
 	// 6. Hash new password with configured bcrypt cost
-	hashedPassword, err := utils.HashPassword(newPassword, service.config.Password.BcryptCost)
+	hashedPassword, err := hashing.HashPassword(newPassword, service.config.Password.BcryptCost)
 	if err != nil {
 		return err
 	}

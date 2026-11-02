@@ -15,58 +15,6 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/auth/accept-invite": {
-            "post": {
-                "description": "Creates an account using an invite token.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "auth"
-                ],
-                "summary": "Accept invitation",
-                "parameters": [
-                    {
-                        "description": "Invite details",
-                        "name": "request",
-                        "in": "body",
-                        "required": true,
-                        "schema": {
-                            "$ref": "#/definitions/handler.AcceptInviteRequest"
-                        }
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handler.TokenPairResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "invalid body",
-                        "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
-                        }
-                    },
-                    "401": {
-                        "description": "invalid token",
-                        "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
-                        }
-                    },
-                    "409": {
-                        "description": "username already claimed",
-                        "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
-                        }
-                    }
-                }
-            }
-        },
         "/auth/check-username": {
             "get": {
                 "description": "Checks if a username is available for registration.",
@@ -90,16 +38,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "boolean"
-                            }
+                            "$ref": "#/definitions/handler.UsernameCheckEnvelope"
                         }
                     },
                     "400": {
                         "description": "missing parameter",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -107,7 +52,7 @@ const docTemplate = `{
         },
         "/auth/forgot-password": {
             "post": {
-                "description": "Sends a password reset OTP to the email if it exists.",
+                "description": "Sends a password reset OTP to the email if it exists. Always\nanswers 204, whether or not the address has an account, so the\nendpoint cannot be used to enumerate registered emails.",
                 "consumes": [
                     "application/json"
                 ],
@@ -130,19 +75,13 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -176,19 +115,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handler.TokenPairResponse"
+                            "$ref": "#/definitions/handler.TokenPairEnvelope"
                         }
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "401": {
                         "description": "invalid credentials",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -225,7 +164,7 @@ const docTemplate = `{
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -259,19 +198,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handler.TokenPairResponse"
+                            "$ref": "#/definitions/handler.TokenPairEnvelope"
                         }
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "401": {
                         "description": "invalid or expired token",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -302,25 +241,19 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "429": {
                         "description": "cooldown active",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -351,25 +284,19 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "401": {
                         "description": "invalid or expired OTP",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -403,43 +330,43 @@ const docTemplate = `{
                     "201": {
                         "description": "Created",
                         "schema": {
-                            "$ref": "#/definitions/handler.SignupResponse"
+                            "$ref": "#/definitions/handler.SignupEnvelope"
                         }
                     },
                     "202": {
                         "description": "duplicate email, masked as success",
                         "schema": {
-                            "$ref": "#/definitions/handler.SignupResponse"
+                            "$ref": "#/definitions/handler.SignupEnvelope"
                         }
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "401": {
                         "description": "registration disabled",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "409": {
                         "description": "username already taken",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "429": {
                         "description": "too many requests",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "500": {
                         "description": "internal error",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -473,31 +400,31 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/handler.TokenPairResponse"
+                            "$ref": "#/definitions/handler.TokenPairEnvelope"
                         }
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "401": {
                         "description": "invalid or expired OTP",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "429": {
                         "description": "too many attempts",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "500": {
                         "description": "internal error",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -522,13 +449,13 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.UserProfile"
+                            "$ref": "#/definitions/handler.ProfileEnvelope"
                         }
                     },
                     "401": {
                         "description": "unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -548,19 +475,13 @@ const docTemplate = `{
                 ],
                 "summary": "Delete profile",
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                    "204": {
+                        "description": "No Content"
                     },
                     "401": {
                         "description": "unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -597,25 +518,25 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/model.UserProfile"
+                            "$ref": "#/definitions/handler.ProfileEnvelope"
                         }
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "401": {
                         "description": "unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "409": {
                         "description": "username already claimed",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -651,25 +572,19 @@ const docTemplate = `{
                     }
                 ],
                 "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
+                    "204": {
+                        "description": "No Content"
                     },
                     "400": {
                         "description": "invalid body",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     },
                     "401": {
                         "description": "unauthorized",
                         "schema": {
-                            "$ref": "#/definitions/handler.ErrorResponse"
+                            "$ref": "#/definitions/apiresponse.ErrorEnvelope"
                         }
                     }
                 }
@@ -677,16 +592,38 @@ const docTemplate = `{
         }
     },
     "definitions": {
-        "handler.AcceptInviteRequest": {
+        "apiresponse.ErrorBody": {
             "type": "object",
             "properties": {
-                "password": {
+                "code": {
                     "type": "string"
                 },
-                "token": {
+                "details": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/apiresponse.FieldError"
+                    }
+                },
+                "message": {
+                    "type": "string"
+                }
+            }
+        },
+        "apiresponse.ErrorEnvelope": {
+            "type": "object",
+            "properties": {
+                "error": {
+                    "$ref": "#/definitions/apiresponse.ErrorBody"
+                }
+            }
+        },
+        "apiresponse.FieldError": {
+            "type": "object",
+            "properties": {
+                "code": {
                     "type": "string"
                 },
-                "username": {
+                "field": {
                     "type": "string"
                 }
             }
@@ -698,14 +635,6 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "old_password": {
-                    "type": "string"
-                }
-            }
-        },
-        "handler.ErrorResponse": {
-            "type": "object",
-            "properties": {
-                "error": {
                     "type": "string"
                 }
             }
@@ -734,6 +663,14 @@ const docTemplate = `{
             "properties": {
                 "refresh_token": {
                     "type": "string"
+                }
+            }
+        },
+        "handler.ProfileEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/model.UserProfile"
                 }
             }
         },
@@ -767,6 +704,25 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.SignupData": {
+            "type": "object",
+            "properties": {
+                "tokens": {
+                    "$ref": "#/definitions/handler.TokenPairResponse"
+                },
+                "verification_required": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handler.SignupEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/handler.SignupData"
+                }
+            }
+        },
         "handler.SignupRequest": {
             "type": "object",
             "properties": {
@@ -781,11 +737,11 @@ const docTemplate = `{
                 }
             }
         },
-        "handler.SignupResponse": {
+        "handler.TokenPairEnvelope": {
             "type": "object",
             "properties": {
-                "message": {
-                    "type": "string"
+                "data": {
+                    "$ref": "#/definitions/handler.TokenPairResponse"
                 }
             }
         },
@@ -817,6 +773,22 @@ const docTemplate = `{
                 }
             }
         },
+        "handler.UsernameCheck": {
+            "type": "object",
+            "properties": {
+                "available": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handler.UsernameCheckEnvelope": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "$ref": "#/definitions/handler.UsernameCheck"
+                }
+            }
+        },
         "handler.VerifyRequest": {
             "type": "object",
             "properties": {
@@ -831,25 +803,25 @@ const docTemplate = `{
         "model.UserProfile": {
             "type": "object",
             "properties": {
-                "avatarURL": {
+                "avatar_url": {
                     "type": "string"
                 },
-                "displayName": {
+                "display_name": {
                     "type": "string"
                 },
                 "email": {
                     "type": "string"
                 },
-                "firstName": {
+                "first_name": {
                     "type": "string"
                 },
                 "id": {
                     "type": "string"
                 },
-                "isVerified": {
+                "is_verified": {
                     "type": "boolean"
                 },
-                "lastName": {
+                "last_name": {
                     "type": "string"
                 },
                 "username": {
