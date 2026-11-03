@@ -12,16 +12,14 @@ import (
 type ResendMailer struct {
 	client      *resend.Client
 	fromAddress string
-	appBaseURL  string
 }
 
 // NewResendMailer constructs a Mailer that sends actual emails via Resend.
-func NewResendMailer(apiKey, fromAddress, appBaseURL string) *ResendMailer {
+func NewResendMailer(apiKey, fromAddress string) *ResendMailer {
 	client := resend.NewClient(apiKey)
 	return &ResendMailer{
 		client:      client,
 		fromAddress: fromAddress,
-		appBaseURL:  appBaseURL,
 	}
 }
 

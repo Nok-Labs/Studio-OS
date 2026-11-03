@@ -96,7 +96,7 @@ func newMailer(t *testing.T, addr string) *SMTPMailer {
 	t.Helper()
 	host, port := splitAddr(t, addr)
 	return NewSMTPMailer(host, port, "sender@example.com", "app-password",
-		"sender@example.com", "https://app.example.com")
+		"sender@example.com")
 }
 
 func splitAddr(t *testing.T, addr string) (host, port string) {
@@ -403,7 +403,7 @@ func TestSMTPMailerDefaultsToPort587WhenUnset(t *testing.T) {
 	// 587 is the submission port that negotiates STARTTLS. Leaving it unset
 	// has to mean that, not an empty port string — net.JoinHostPort with an
 	// empty port would dial "host:" and fail on every send.
-	m := NewSMTPMailer("smtp.gmail.com", "", "u", "p", "f@example.com", "https://x.example")
+	m := NewSMTPMailer("smtp.gmail.com", "", "u", "p", "f@example.com")
 	if m.port != "587" {
 		t.Errorf("port = %q, want 587", m.port)
 	}

@@ -40,9 +40,6 @@ type SMTPMailer struct {
 	// A non-nil value is for an internal relay presenting a certificate from a
 	// private CA, where the public roots will not have it.
 	tlsConfig *tls.Config
-
-	// appBaseURL builds the invitation link. See SendInvite.
-	appBaseURL string
 }
 
 // NewSMTPMailer constructs a Mailer that delivers through host:port.
@@ -50,17 +47,16 @@ type SMTPMailer struct {
 // port is empty, default is 587 — the submission port that expects STARTTLS.
 // Gmail also offers 465 with implicit TLS, but 587 is the one net/smtp
 // negotiates in the way this type is written.
-func NewSMTPMailer(host, port, username, password, from, appBaseURL string) *SMTPMailer {
+func NewSMTPMailer(host, port, username, password, from string) *SMTPMailer {
 	if port == "" {
 		port = "587"
 	}
 	return &SMTPMailer{
-		host:       host,
-		port:       port,
-		username:   username,
-		password:   password,
-		from:       from,
-		appBaseURL: appBaseURL,
+		host:     host,
+		port:     port,
+		username: username,
+		password: password,
+		from:     from,
 	}
 }
 

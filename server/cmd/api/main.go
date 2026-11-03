@@ -111,10 +111,10 @@ func main() {
 	case cfg.SMTPConfigured:
 		mailService = mailer.NewSMTPMailer(
 			cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUsername,
-			cfg.SMTPPassword, cfg.SMTPFrom, cfg.AppBaseURL)
+			cfg.SMTPPassword, cfg.SMTPFrom)
 		slog.Info("Initialized SMTP Mailer", "host", cfg.SMTPHost, "port", cfg.SMTPPort, "from", cfg.SMTPFrom)
 	case cfg.MailConfigured:
-		mailService = mailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFromAddress, cfg.AppBaseURL)
+		mailService = mailer.NewResendMailer(cfg.ResendAPIKey, cfg.ResendFromAddress)
 		slog.Info("Initialized Resend Mailer", "from", cfg.ResendFromAddress)
 	default:
 		mailService = mailer.NewNoOpMailer()
