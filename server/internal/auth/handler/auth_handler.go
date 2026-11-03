@@ -403,7 +403,7 @@ func (h *AuthHandler) CheckUsername(c echo.Context) error {
 // @Router       /v1/users/me [delete]
 func (h *AuthHandler) DeleteProfile(c echo.Context) error {
 	userID := middleware.GetUserID(c)
-	if err := h.svc.Profile.DeleteProfile(c.Request().Context(), userID); err != nil {
+	if err := h.svc.Profile.DeleteAccount(c.Request().Context(), userID); err != nil {
 		return httperr.Fail(c, err)
 	}
 	return c.NoContent(http.StatusNoContent)

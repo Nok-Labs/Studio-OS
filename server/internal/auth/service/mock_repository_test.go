@@ -30,7 +30,6 @@ type mockAuthRepository struct {
 	GetProfileByUserIDFn  func(ctx context.Context, userID uuid.UUID) (db.Profile, error)
 	UpdateProfileFn       func(ctx context.Context, userID uuid.UUID, firstName, lastName, username, displayName, profileURL, avatarURL *string) (db.Profile, error)
 	CheckUsernameExistsFn func(ctx context.Context, username string) (bool, error)
-	DeleteProfileFn       func(ctx context.Context, userID uuid.UUID) error
 
 	// OAuth
 	GetOAuthConnectionFn       func(ctx context.Context, provider, providerUserID string) (db.OauthConnection, error)
@@ -131,13 +130,6 @@ func (mock *mockAuthRepository) CheckUsernameExists(ctx context.Context, usernam
 		return mock.CheckUsernameExistsFn(ctx, username)
 	}
 	return false, errors.New("CheckUsernameExists not implemented")
-}
-
-func (mock *mockAuthRepository) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
-	if mock.DeleteProfileFn != nil {
-		return mock.DeleteProfileFn(ctx, userID)
-	}
-	return errors.New("DeleteProfile not implemented")
 }
 
 // OAuth implementations
@@ -273,20 +265,12 @@ var _ repository.AuthRepository = (*mockAuthRepository)(nil)
 // mockMailer is a test double that satisfies model.Mailer.
 type mockMailer struct {
 	SendOTPFn           func(ctx context.Context, email, code string) error
-	SendInviteFn        func(ctx context.Context, email, token string) error
 	SendPasswordResetFn func(ctx context.Context, email, code string) error
 }
 
 func (mock *mockMailer) SendOTP(ctx context.Context, email, code string) error {
 	if mock.SendOTPFn != nil {
 		return mock.SendOTPFn(ctx, email, code)
-	}
-	return nil
-}
-
-func (mock *mockMailer) SendInvite(ctx context.Context, email, token string) error {
-	if mock.SendInviteFn != nil {
-		return mock.SendInviteFn(ctx, email, token)
 	}
 	return nil
 }

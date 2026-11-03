@@ -249,30 +249,6 @@ func TestProfileService_CheckUsernameAvailable(t *testing.T) {
 	})
 }
 
-func TestProfileService_DeleteProfile(t *testing.T) {
-	ctx := context.Background()
-	mockRepo := &mockAuthRepository{}
-	cfg := setupTestConfig()
-	testUserID := uuid.New()
-	deleted := false
-
-	mockRepo.DeleteProfileFn = func(ctx context.Context, userID uuid.UUID) error {
-		if userID == testUserID {
-			deleted = true
-		}
-		return nil
-	}
-
-	profileService := NewProfileService(mockRepo, cfg)
-	err := profileService.DeleteProfile(ctx, testUserID)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if !deleted {
-		t.Fatal("expected DeleteProfile to be called")
-	}
-}
-
 func TestProfileService_DeleteAccount(t *testing.T) {
 	ctx := context.Background()
 	mockRepo := &mockAuthRepository{}

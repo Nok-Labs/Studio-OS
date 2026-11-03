@@ -29,7 +29,6 @@ type fakeQuerier struct {
 	getProfileByUserIDFn  func(ctx context.Context, userID uuid.UUID) (db.Profile, error)
 	updateProfileFn       func(ctx context.Context, arg db.UpdateProfileParams) (db.Profile, error)
 	checkUsernameExistsFn func(ctx context.Context, username pgtype.Text) (bool, error)
-	deleteProfileFn       func(ctx context.Context, userID uuid.UUID) error
 
 	getOAuthConnectionFn       func(ctx context.Context, arg db.GetOAuthConnectionParams) (db.OauthConnection, error)
 	getUserByOAuthProviderFn   func(ctx context.Context, arg db.GetUserByOAuthProviderParams) (db.User, error)
@@ -119,13 +118,6 @@ func (f *fakeQuerier) CheckUsernameExists(ctx context.Context, username pgtype.T
 		return f.checkUsernameExistsFn(ctx, username)
 	}
 	return false, nil
-}
-
-func (f *fakeQuerier) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
-	if f.deleteProfileFn != nil {
-		return f.deleteProfileFn(ctx, userID)
-	}
-	return nil
 }
 
 func (f *fakeQuerier) GetOAuthConnection(ctx context.Context, arg db.GetOAuthConnectionParams) (db.OauthConnection, error) {
@@ -515,28 +507,6 @@ func TestProfileRepository(t *testing.T) {
 		_, err := repo.GetProfileByUserID(ctx, testUserID)
 		if !errors.Is(err, ErrNotFound) {
 			t.Fatalf("expected ErrNotFound, got: %v", err)
-		}
-	})
-
-	t.Run("DeleteProfile - Happy Path & Sad Path", func(t *testing.T) {
-		fakeSuccess := &fakeQuerier{
-			deleteProfileFn: func(ctx context.Context, userID uuid.UUID) error {
-				return nil
-			},
-		}
-		repo := NewAuthRepository(fakeSuccess)
-		if err := repo.DeleteProfile(ctx, testUserID); err != nil {
-			t.Fatalf("expected success, got %v", err)
-		}
-
-		fakeFail := &fakeQuerier{
-			deleteProfileFn: func(ctx context.Context, userID uuid.UUID) error {
-				return errors.New("db disconnect")
-			},
-		}
-		repoFail := NewAuthRepository(fakeFail)
-		if err := repoFail.DeleteProfile(ctx, testUserID); err == nil {
-			t.Fatalf("expected error, got nil")
 		}
 	})
 }

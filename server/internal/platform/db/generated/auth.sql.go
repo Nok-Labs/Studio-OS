@@ -231,16 +231,6 @@ func (q *Queries) DeleteOTP(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const deleteProfile = `-- name: DeleteProfile :exec
-DELETE FROM profiles
-WHERE user_id = $1
-`
-
-func (q *Queries) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, deleteProfile, userID)
-	return err
-}
-
 const deleteRefreshToken = `-- name: DeleteRefreshToken :exec
 DELETE FROM refresh_tokens
 WHERE id = $1

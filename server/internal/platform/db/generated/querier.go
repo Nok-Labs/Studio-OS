@@ -44,7 +44,6 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) error
 	DeleteOTP(ctx context.Context, id uuid.UUID) error
-	DeleteProfile(ctx context.Context, userID uuid.UUID) error
 	DeleteRefreshToken(ctx context.Context, id uuid.UUID) error
 	DeleteTask(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
