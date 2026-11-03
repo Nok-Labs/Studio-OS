@@ -21,7 +21,7 @@ type ProjectResponse struct {
 	Name      string          `json:"name"`
 	Summary   *string         `json:"summary"`
 	Status    string          `json:"status"`
-	Metadata  json.RawMessage `json:"metadata"`
+	Metadata  json.RawMessage `json:"metadata" swaggertype:"object"`
 	DeletedAt *time.Time      `json:"deleted_at,omitempty"`
 	CreatedAt time.Time       `json:"created_at"`
 	UpdatedAt time.Time       `json:"updated_at"`
