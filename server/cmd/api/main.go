@@ -29,6 +29,9 @@ import (
 	db "server/internal/platform/db/generated"
 	"server/internal/platform/httpserver"
 	"server/internal/platform/mailer"
+	phandler "server/internal/project/handler"
+	prepository "server/internal/project/repository"
+	pservice "server/internal/project/service"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -163,10 +166,18 @@ func main() {
 	// 4. Initialize Services
 	authServices := service.NewServices(authRepo, authCfg, jwtIssuer, mailService)
 
+	// The projects domain resolves member emails through the auth domain, so
+	// its services take the auth repository (it satisfies the UserLookup
+	// interface). Both domains share one pgx pool via their repositories.
+	projectRepo := prepository.NewProjectRepository(queries, prepository.WithTxSource(pool))
+	projectServices := pservice.NewServices(projectRepo, authRepo)
+
 	// 5. Initialize Handlers
 	authHandler := authhandler.NewAuthHandler(authServices)
+	projectHandler := phandler.NewProjectHandler(projectServices)
 	handlers := httpserver.Handlers{
-		Auth: authHandler,
+		Auth:     authHandler,
+		Projects: projectHandler,
 	}
 
 	// 6. Build HTTP Router
