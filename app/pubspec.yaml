@@ -11,7 +11,7 @@ dependencies:
   connectivity_plus: ^7.3.1
   dart_either: ^2.0.0
   dio: ^5.11.0
-  firebase_core: ^4.13.0
+  firebase_core: ^4.15.2
   firebase_messaging: ^16.5.0
   flutter:
     sdk: flutter
