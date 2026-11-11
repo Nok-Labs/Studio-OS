@@ -44,6 +44,25 @@ type Profile struct {
 	UpdatedAt   time.Time   `json:"updated_at"`
 }
 
+type Project struct {
+	ID        uuid.UUID  `json:"id"`
+	OwnerID   uuid.UUID  `json:"owner_id"`
+	Name      string     `json:"name"`
+	Summary   *string    `json:"summary"`
+	Status    string     `json:"status"`
+	Metadata  []byte     `json:"metadata"`
+	DeletedAt *time.Time `json:"deleted_at"`
+	CreatedAt time.Time  `json:"created_at"`
+	UpdatedAt time.Time  `json:"updated_at"`
+}
+
+type ProjectMember struct {
+	ID        uuid.UUID `json:"id"`
+	ProjectID uuid.UUID `json:"project_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type RefreshToken struct {
 	ID         uuid.UUID  `json:"id"`
 	UserID     uuid.UUID  `json:"user_id"`
@@ -52,6 +71,20 @@ type RefreshToken struct {
 	RevokedAt  *time.Time `json:"revoked_at"`
 	LastUsedAt *time.Time `json:"last_used_at"`
 	CreatedAt  time.Time  `json:"created_at"`
+}
+
+type Task struct {
+	ID          uuid.UUID  `json:"id"`
+	ProjectID   uuid.UUID  `json:"project_id"`
+	Title       string     `json:"title"`
+	Description *string    `json:"description"`
+	Area        string     `json:"area"`
+	Tags        []string   `json:"tags"`
+	Status      string     `json:"status"`
+	AssigneeID  *uuid.UUID `json:"assignee_id"`
+	DueDate     *time.Time `json:"due_date"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 type User struct {

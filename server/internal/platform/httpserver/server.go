@@ -10,6 +10,7 @@ import (
 	"server/internal/auth/repository"
 	"server/internal/auth/token"
 	"server/internal/platform/apiresponse"
+	projecthandler "server/internal/project/handler"
 
 	_ "server/docs"
 
@@ -20,7 +21,8 @@ import (
 
 // Handlers bundles every domain's HTTP handler so we don't have a giant param list.
 type Handlers struct {
-	Auth *handler.AuthHandler
+	Auth     *handler.AuthHandler
+	Projects *projecthandler.ProjectHandler
 }
 
 // NewRouter constructs the global HTTP pipeline with middlewares and routes.
@@ -148,6 +150,31 @@ func NewRouter(
 	userGroup.PATCH("/me", h.Auth.UpdateProfile)
 	userGroup.POST("/me/password", h.Auth.ChangePassword)
 	userGroup.DELETE("/me", h.Auth.DeleteProfile)
+
+	// Project routes. Membership (owner or member) is enforced in the
+	// service layer, not here; the middleware only settles the caller.
+	projectsGroup := v1.Group("/projects")
+	projectsGroup.POST("", h.Projects.CreateProject)
+	projectsGroup.GET("", h.Projects.ListProjects)
+	projectsGroup.GET("/:id", h.Projects.GetProject)
+	projectsGroup.PATCH("/:id", h.Projects.UpdateProject)
+	projectsGroup.DELETE("/:id", h.Projects.DeleteProject)
+	projectsGroup.GET("/:id/members", h.Projects.ListMembers)
+	projectsGroup.POST("/:id/members", h.Projects.AddMember)
+	projectsGroup.DELETE("/:id/members/:userId", h.Projects.RemoveMember)
+	projectsGroup.POST("/:id/tasks", h.Projects.CreateTask)
+	projectsGroup.GET("/:id/tasks", h.Projects.ListProjectTasks)
+
+	// Task routes shared across projects. Static "/me" wins over the
+	// parameterized "/:taskId" regardless of registration order.
+	tasksGroup := v1.Group("/tasks")
+	tasksGroup.GET("/me", h.Projects.ListMyTasks)
+	tasksGroup.GET("/:taskId", h.Projects.GetTask)
+	tasksGroup.PATCH("/:taskId", h.Projects.UpdateTask)
+	tasksGroup.DELETE("/:taskId", h.Projects.DeleteTask)
+	tasksGroup.PATCH("/:taskId/status", h.Projects.SetTaskStatus)
+	tasksGroup.PATCH("/:taskId/assignee", h.Projects.SetTaskAssignee)
+	tasksGroup.PATCH("/:taskId/due-date", h.Projects.SetTaskDueDate)
 
 	return e
 }

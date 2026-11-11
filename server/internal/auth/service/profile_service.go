@@ -170,11 +170,6 @@ func (service *ProfileService) CheckUsernameAvailable(ctx context.Context, usern
 	return !exists, nil
 }
 
-// DeleteProfile deletes a user's associated profile record while retaining their authentication credentials.
-func (service *ProfileService) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
-	return service.repo.DeleteProfile(ctx, userID)
-}
-
 // DeleteAccount permanently deletes a user account.
 //
 // Deleting the users row is enough: profiles, oauth_connections, refresh_tokens

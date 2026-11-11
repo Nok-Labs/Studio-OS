@@ -44,7 +44,6 @@ type AuthRepository interface {
 	GetProfileByUserID(ctx context.Context, userID uuid.UUID) (db.Profile, error)
 	UpdateProfile(ctx context.Context, userID uuid.UUID, firstName, lastName, username, displayName, profileURL, avatarURL *string) (db.Profile, error)
 	CheckUsernameExists(ctx context.Context, username string) (bool, error)
-	DeleteProfile(ctx context.Context, userID uuid.UUID) error
 
 	// ===================================
 	// OAUTH
@@ -248,11 +247,6 @@ func (repo *authRepositoryImpl) UpdateProfile(ctx context.Context, userID uuid.U
 func (repo *authRepositoryImpl) CheckUsernameExists(ctx context.Context, username string) (bool, error) {
 	exists, err := repo.queries.CheckUsernameExists(ctx, pgtype.Text{String: username, Valid: true})
 	return exists, wrap(err)
-}
-
-func (repo *authRepositoryImpl) DeleteProfile(ctx context.Context, userID uuid.UUID) error {
-	err := repo.queries.DeleteProfile(ctx, userID)
-	return wrap(err)
 }
 
 // ===================================

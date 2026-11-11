@@ -47,10 +47,66 @@ definitions:
       refresh_token:
         type: string
     type: object
+  handler.MemberEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/handler.ProjectMemberResponse'
+    type: object
+  handler.MembersEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/handler.ProjectMemberResponse'
+        type: array
+    type: object
   handler.ProfileEnvelope:
     properties:
       data:
         $ref: '#/definitions/model.UserProfile'
+    type: object
+  handler.ProjectEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/handler.ProjectResponse'
+    type: object
+  handler.ProjectListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/handler.ProjectResponse'
+        type: array
+    type: object
+  handler.ProjectMemberResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      project_id:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handler.ProjectResponse:
+    properties:
+      created_at:
+        type: string
+      deleted_at:
+        type: string
+      id:
+        type: string
+      metadata:
+        type: object
+      name:
+        type: string
+      owner_id:
+        type: string
+      status:
+        type: string
+      summary:
+        type: string
+      updated_at:
+        type: string
     type: object
   handler.RefreshRequest:
     properties:
@@ -90,6 +146,45 @@ definitions:
       password:
         type: string
       username:
+        type: string
+    type: object
+  handler.TaskEnvelope:
+    properties:
+      data:
+        $ref: '#/definitions/handler.TaskResponse'
+    type: object
+  handler.TaskListEnvelope:
+    properties:
+      data:
+        items:
+          $ref: '#/definitions/handler.TaskResponse'
+        type: array
+    type: object
+  handler.TaskResponse:
+    properties:
+      area:
+        type: string
+      assignee_id:
+        type: string
+      created_at:
+        type: string
+      description:
+        type: string
+      due_date:
+        type: string
+      id:
+        type: string
+      project_id:
+        type: string
+      status:
+        type: string
+      tags:
+        items:
+          type: string
+        type: array
+      title:
+        type: string
+      updated_at:
         type: string
     type: object
   handler.TokenPairEnvelope:
@@ -443,6 +538,272 @@ paths:
       summary: Confirm signup OTP and activate the account
       tags:
       - auth
+  /v1/projects:
+    get:
+      description: Projects the caller owns or was added to, deleted ones hidden.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ProjectListEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List my projects
+      tags:
+      - projects
+    post:
+      description: |-
+        Creates a project owned by the caller. No member row is
+        written for the owner; ownership is implied by owner_id.
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: created
+          schema:
+            $ref: '#/definitions/handler.ProjectEnvelope'
+        "400":
+          description: invalid_project_name
+          schema:
+            $ref: '#/definitions/apiresponse.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create a project
+      tags:
+      - projects
+  /v1/projects/{id}:
+    delete:
+      description: |-
+        Marks the project deleted; its tasks and members are hidden,
+        not destroyed.
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: project_not_found
+          schema:
+            $ref: '#/definitions/apiresponse.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Soft-delete a project (owner-only)
+      tags:
+      - projects
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ProjectEnvelope'
+        "404":
+          description: project_not_found
+          schema:
+            $ref: '#/definitions/apiresponse.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get a project
+      tags:
+      - projects
+    patch:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.ProjectEnvelope'
+        "403":
+          description: project_owner_required
+          schema:
+            $ref: '#/definitions/apiresponse.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update a project (owner-only)
+      tags:
+      - projects
+  /v1/projects/{id}/members:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.MembersEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List a project's members
+      tags:
+      - projects
+    post:
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.MemberEnvelope'
+        "404":
+          description: user_not_found — no account with that email
+          schema:
+            $ref: '#/definitions/apiresponse.ErrorEnvelope'
+        "409":
+          description: already_member
+          schema:
+            $ref: '#/definitions/apiresponse.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Add a member by email (owner-only)
+      tags:
+      - projects
+  /v1/projects/{id}/members/{userId}:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: member_not_found
+          schema:
+            $ref: '#/definitions/apiresponse.ErrorEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Remove a member (owner-only)
+      tags:
+      - projects
+  /v1/projects/{id}/tasks:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TaskListEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List a project's tasks
+      tags:
+      - tasks
+    post:
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/handler.TaskEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Create a task in a project
+      tags:
+      - tasks
+  /v1/tasks/{taskId}:
+    delete:
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete a task
+      tags:
+      - tasks
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TaskEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Get a task
+      tags:
+      - tasks
+    patch:
+      description: |-
+        All fields are optional and act as partial updates; tags
+        follow the tri-state (omitted = unchanged, [] = clear).
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TaskEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Update a task
+      tags:
+      - tasks
+  /v1/tasks/{taskId}/assignee:
+    patch:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TaskEnvelope'
+      security:
+      - BearerAuth: []
+      summary: 'Assign or unassign ({"assignee_id": null}) a task'
+      tags:
+      - tasks
+  /v1/tasks/{taskId}/due-date:
+    patch:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TaskEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Set or clear (null) a task's due date
+      tags:
+      - tasks
+  /v1/tasks/{taskId}/status:
+    patch:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TaskEnvelope'
+      security:
+      - BearerAuth: []
+      summary: Move a task's status
+      tags:
+      - tasks
+  /v1/tasks/me:
+    get:
+      description: |-
+        The login-time board: tasks assigned to the caller across all
+        live projects.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.TaskListEnvelope'
+      security:
+      - BearerAuth: []
+      summary: List the caller's assigned tasks
+      tags:
+      - tasks
   /v1/users/me:
     delete:
       description: Allows a user to permanently delete their own account.

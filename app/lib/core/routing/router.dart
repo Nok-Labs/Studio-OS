@@ -41,6 +41,7 @@ GoRouter router(Ref ref) {
       // This fetches the storage service instance and gets the access token from
       // there and puts it in the token variable basically... Easy peasy
       final storage = ref.read(secureStorageProvider);
+
       // Lest i forget, token is a String? meaning it can be null
       final String? token = await storage.getAccessToken();
 
@@ -61,7 +62,6 @@ GoRouter router(Ref ref) {
         '/get-started',
         '/onboarding',
         '/verify',
-        '/verify-otp',
         '/forgot-password',
         '/reset-password',
         '/404',
@@ -70,7 +70,13 @@ GoRouter router(Ref ref) {
       // If users is not logged in, only redirect known protected routes to register.
       // Unrecognized routes return null so GoRouter's errorBuilder renders the 404 page.
       if (!isLoggedIn && !isAuthRoute) {
-        const knownProtectedRoutes = ['/', '/home', '/dashboard', '/settings', '/set-username'];
+        const knownProtectedRoutes = [
+          '/',
+          '/home',
+          '/dashboard',
+          '/settings',
+          '/set-username',
+        ];
         if (knownProtectedRoutes.contains(state.uri.path)) {
           return '/register';
         }

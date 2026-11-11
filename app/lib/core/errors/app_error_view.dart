@@ -75,6 +75,80 @@ class AppErrorView {
         );
 
       //========================================================================
+      // Projects, Members & Tasks
+      //========================================================================
+      case 'project_not_found':
+        return const AppErrorView(
+          title: 'Project not found',
+          description:
+              'This project doesn’t exist or you no longer have access to it.',
+        );
+      case 'task_not_found':
+        return const AppErrorView(
+          title: 'Task not found',
+          description: 'This task may have been deleted by a teammate.',
+        );
+      case 'member_not_found':
+        return const AppErrorView(
+          title: 'Not a member',
+          description: 'This person is not on the project.',
+        );
+      case 'user_not_found':
+        return const AppErrorView(
+          title: 'No Studio account yet',
+          description:
+              'There’s no account with that email. Have them sign up first, then add them here.',
+        );
+      case 'project_owner_required':
+        return const AppErrorView(
+          title: 'Only the owner can do that',
+          description:
+              'Not every project action is available to teammates — this one is the owner’s.',
+        );
+      case 'already_member':
+        return const AppErrorView(
+          title: 'Already on the project',
+          description:
+              'This person is already a member and doesn’t need to be added again.',
+        );
+      case 'assignee_not_member':
+        return const AppErrorView(
+          title: 'Can’t assign that person',
+          description: 'Tasks can only be assigned to people on the project.',
+        );
+      case 'invalid_project_name':
+        return const AppErrorView(
+          title: 'Invalid project name',
+          description:
+              'Give the project a name of at least one character (and under 255).',
+        );
+      case 'invalid_project_status':
+        return const AppErrorView(
+          title: 'Unsupported status',
+          description: 'Projects can be draft, active or completed.',
+        );
+      case 'invalid_task_title':
+        return const AppErrorView(
+          title: 'Invalid task title',
+          description: 'Give the task a title of at least one character.',
+        );
+      case 'invalid_task_area':
+        return const AppErrorView(
+          title: 'Unsupported area',
+          description: 'Choose one of: backend, frontend, design, doc.',
+        );
+      case 'invalid_task_status':
+        return const AppErrorView(
+          title: 'Unsupported status',
+          description: 'Tasks move along: todo, in progress, done.',
+        );
+      case 'too_many_tags':
+        return const AppErrorView(
+          title: 'Too many tags',
+          description: 'A task can hold at most 20 tags.',
+        );
+
+      //========================================================================
       // Account Status
       //========================================================================
       case 'account_suspended':
@@ -110,10 +184,25 @@ class AppErrorView {
           description:
               'The server is taking too long to respond. Please check your connection and retry.',
         );
+      case 'cancelled':
+        return const AppErrorView(
+          title: 'Cancelled',
+          description: 'The request was cancelled.',
+        );
 
       //========================================================================
       // Validation & Server
       //========================================================================
+      case 'invalid_profile_name':
+        return const AppErrorView(
+          title: 'Name too long',
+          description: 'Names have a limit — try shortening it a little.',
+        );
+      case 'invalid_avatar_url':
+        return const AppErrorView(
+          title: 'Avatar link not accepted',
+          description: 'The avatar must be a normal web link (http or https).',
+        );
       case 'validation_failed':
         final detailMsg = error.details != null && error.details!.isNotEmpty
             ? error.details!.map((d) => '${d.field}: ${d.code}').join(', ')

@@ -67,10 +67,6 @@ SELECT EXISTS(
   SELECT 1 FROM profiles WHERE username = $1
 );
 
--- name: DeleteProfile :exec
-DELETE FROM profiles
-WHERE user_id = $1;
-
 -- ===================================
 -- OAUTH
 -- ===================================

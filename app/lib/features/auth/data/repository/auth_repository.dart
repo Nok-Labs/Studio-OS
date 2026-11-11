@@ -3,6 +3,7 @@ import 'package:studio_os/core/errors/error_mapper.dart';
 import 'package:studio_os/core/storage/secure_storage.dart';
 import 'package:studio_os/features/auth/data/models/forgot_password.dart';
 import 'package:studio_os/features/auth/data/models/login.dart';
+import 'package:studio_os/features/auth/data/models/profile.dart';
 import 'package:studio_os/features/auth/data/models/register.dart';
 import 'package:studio_os/features/auth/data/models/verify.dart';
 import 'package:studio_os/features/auth/data/remote/auth_remote.dart';
@@ -69,6 +70,20 @@ class AuthRepository {
     ResetPasswordRequest request,
   ) async {
     return await _remote.resetPassword(request);
+  }
+
+  /// Fetches the caller's identity from the server. The onboarding gate and
+  /// the account screen both read this; it never touches tokens.
+  Future<Either<Failure, ProfileResponse>> getMe() async {
+    return await _remote.getProfile();
+  }
+
+  /// Partial profile update. Returns the server's fresh copy of the profile —
+  /// prefer it over merging locally, so the app satisfies what's stored.
+  Future<Either<Failure, ProfileResponse>> updateMe(
+    ProfileUpdateRequest request,
+  ) async {
+    return await _remote.updateMe(request);
   }
 }
 

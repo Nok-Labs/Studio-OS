@@ -36,7 +36,8 @@ Failure mapDioException(DioException e) {
         details: envelope.error.details,
       );
     } catch (_) {
-      // Non-2xx but not our shape (proxy/gateway). Don't explode.
+      // Non-2xx but not our shape (proxy/gateway). Don't explode — but keep
+      // the status so controllers can still branch on 401/403/5xx.
       return Failure(
         code: 'unexpected',
         message: 'Something went wrong.',

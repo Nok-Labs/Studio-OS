@@ -12,6 +12,10 @@ import (
 )
 
 type Querier interface {
+	// ===================================
+	// PROJECT MEMBERS
+	// ===================================
+	AddProjectMember(ctx context.Context, arg AddProjectMemberParams) (ProjectMember, error)
 	CheckUsernameExists(ctx context.Context, username pgtype.Text) (bool, error)
 	CreateOAuthConnection(ctx context.Context, arg CreateOAuthConnectionParams) (OauthConnection, error)
 	// ===================================
@@ -23,17 +27,25 @@ type Querier interface {
 	// ===================================
 	CreateProfile(ctx context.Context, arg CreateProfileParams) (Profile, error)
 	// ===================================
+	// PROJECTS
+	// ===================================
+	CreateProject(ctx context.Context, arg CreateProjectParams) (Project, error)
+	// ===================================
 	// REFRESH TOKENS
 	// ===================================
 	CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (RefreshToken, error)
+	// ===================================
+	// TASKS
+	// ===================================
+	CreateTask(ctx context.Context, arg CreateTaskParams) (Task, error)
 	// ===================================
 	// USER
 	// ===================================
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteOAuthConnection(ctx context.Context, arg DeleteOAuthConnectionParams) error
 	DeleteOTP(ctx context.Context, id uuid.UUID) error
-	DeleteProfile(ctx context.Context, userID uuid.UUID) error
 	DeleteRefreshToken(ctx context.Context, id uuid.UUID) error
+	DeleteTask(ctx context.Context, id uuid.UUID) error
 	DeleteUser(ctx context.Context, id uuid.UUID) error
 	// ===================================
 	// OAUTH
@@ -41,18 +53,40 @@ type Querier interface {
 	GetOAuthConnection(ctx context.Context, arg GetOAuthConnectionParams) (OauthConnection, error)
 	GetOAuthProvidersForUser(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetProfileByUserID(ctx context.Context, userID uuid.UUID) (Profile, error)
+	GetProjectByID(ctx context.Context, id uuid.UUID) (Project, error)
+	GetProjectMember(ctx context.Context, arg GetProjectMemberParams) (ProjectMember, error)
 	GetRefreshToken(ctx context.Context, tokenHash string) (RefreshToken, error)
+	GetTaskByID(ctx context.Context, id uuid.UUID) (Task, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByOAuthProvider(ctx context.Context, arg GetUserByOAuthProviderParams) (User, error)
 	GetValidOTP(ctx context.Context, arg GetValidOTPParams) (OtpCode, error)
 	GetValidOTPForUpdate(ctx context.Context, arg GetValidOTPForUpdateParams) (OtpCode, error)
 	IncrementOTPAttempts(ctx context.Context, id uuid.UUID) (int32, error)
+	ListProjectMembers(ctx context.Context, projectID uuid.UUID) ([]ProjectMember, error)
+	// Projects the user can touch: owned by them or shared with them as a member.
+	// The LEFT JOIN keeps owner-only projects that have no member rows yet.
+	ListProjectsForUser(ctx context.Context, userID uuid.UUID) ([]Project, error)
+	// The login-time "my tasks" board: assigned to me, in projects still alive.
+	ListTasksByAssignee(ctx context.Context, assigneeID *uuid.UUID) ([]Task, error)
+	ListTasksByProject(ctx context.Context, projectID uuid.UUID) ([]Task, error)
 	MarkEmailVerified(ctx context.Context, id uuid.UUID) error
 	MarkOTPUsed(ctx context.Context, id uuid.UUID) error
+	RemoveProjectMember(ctx context.Context, arg RemoveProjectMemberParams) error
 	RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error
 	RevokeRefreshToken(ctx context.Context, id uuid.UUID) error
+	// Pass NULL to unassign.
+	SetTaskAssignee(ctx context.Context, arg SetTaskAssigneeParams) (Task, error)
+	// Pass NULL to clear.
+	SetTaskDueDate(ctx context.Context, arg SetTaskDueDateParams) (Task, error)
+	SoftDeleteProject(ctx context.Context, id uuid.UUID) error
 	UpdateProfile(ctx context.Context, arg UpdateProfileParams) (Profile, error)
+	// Partial update: NULLs for a field leave it unchanged. Passing an empty JSON
+	// object to metadata clears it; sqlc.narg cannot express an explicit NULL.
+	UpdateProject(ctx context.Context, arg UpdateProjectParams) (Project, error)
+	// Partial update: NULLs for a field leave it unchanged.
+	UpdateTask(ctx context.Context, arg UpdateTaskParams) (Task, error)
+	UpdateTaskStatus(ctx context.Context, arg UpdateTaskStatusParams) (Task, error)
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 }
 
