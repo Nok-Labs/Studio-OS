@@ -1,21 +1,32 @@
 version: 2
+
 updates:
   - package-ecosystem: "pub"
     directory: "/app"
     schedule:
-      interval: "weekly"
+      interval: "yearly"
     target-branch: "develop"
     open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "gomod"
     directory: "/server"
     schedule:
-      interval: "weekly"
+      interval: "yearly"
     target-branch: "develop"
     open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
+      interval: "yearly"
     target-branch: "develop"
