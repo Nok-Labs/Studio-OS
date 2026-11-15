@@ -8,6 +8,7 @@ import 'package:studio_os/core/presentation/toast/toast_extensions.dart';
 import 'package:studio_os/features/auth/shared/presentation/auth_layout.dart';
 import 'package:studio_os/features/auth/ui/login/controllers/login_controller.dart';
 import 'package:studio_os/features/auth/ui/login/widgets/login_form.dart';
+import 'package:studio_os/features/auth/ui/profile/controllers/profile_controller.dart';
 import 'package:studio_os/features/auth/ui/register/controller/register_controller.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -35,10 +36,16 @@ class LoginScreen extends HookConsumerWidget {
           }
           context.showFailureToast(error);
         },
-        data: (_) {
+        data: (_) async {
           // Success! Navigate forward
-          context.showSuccessToast(title: 'Login Successful');
-          context.goNamed('home');
+          try {
+            await ref.read(profileProvider.future);
+          } catch (_) {}
+
+          if (context.mounted) {
+            context.showSuccessToast(title: 'Login Successful');
+            context.goNamed('projects');
+          }
         },
       );
     });

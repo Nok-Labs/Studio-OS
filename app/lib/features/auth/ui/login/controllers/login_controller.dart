@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:studio_os/features/auth/data/models/login.dart';
 import 'package:studio_os/features/auth/data/models/verify.dart';
 import 'package:studio_os/features/auth/data/repository/auth_repository.dart';
+import 'package:studio_os/features/auth/ui/profile/controllers/profile_controller.dart';
 import 'package:studio_os/features/auth/ui/register/controller/register_controller.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -32,7 +33,10 @@ class LoginController extends _$LoginController {
         }
         return AsyncValue.error(failure, StackTrace.current);
       },
-      ifRight: (response) => const AsyncValue.data(null),
+      ifRight: (response) {
+        ref.invalidate(profileProvider);
+        return const AsyncValue.data(null);
+      },
     );
   }
 }

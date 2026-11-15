@@ -8,6 +8,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:studio_os/core/constants/constants.dart';
 import 'package:studio_os/core/presentation/toast/toast_extensions.dart';
 import 'package:studio_os/features/auth/shared/presentation/auth_layout.dart';
+import 'package:studio_os/features/auth/ui/profile/controllers/profile_controller.dart';
 import 'package:studio_os/features/auth/ui/register/controller/register_controller.dart';
 import 'package:studio_os/features/auth/ui/verify/controllers/verify_controller.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
@@ -51,13 +52,19 @@ class VerifyScreen extends HookConsumerWidget {
         error: (error, _) {
           context.showFailureToast(error);
         },
-        data: (_) {
-          context.showSuccessToast(
-            title: 'Account Verified',
-            description: 'Your account has been verified successfully.',
-          );
-          // Navigate to setup or home route
-          context.goNamed('home');
+        data: (_) async {
+          try {
+            ref.invalidate(profileProvider);
+            await ref.read(profileProvider.future);
+          } catch (_) {}
+          if (context.mounted) {
+            context.showSuccessToast(
+              title: 'Account Verified',
+              description: 'Your account has been verified successfully.',
+            );
+            // Navigate to setup or home route
+            context.goNamed('projects');
+          }
         },
       );
     });
@@ -307,7 +314,7 @@ class VerifyScreen extends HookConsumerWidget {
         const SizedBox(height: UIConstants.xxl),
         GestureDetector(
           onTap: () {
-            context.goNamed('register');
+            context.goNamed('login');
           },
           child: Row(
             mainAxisSize: MainAxisSize.min,

@@ -9,6 +9,7 @@ import 'package:studio_os/features/auth/ui/reset_password/forgot_password_screen
 import 'package:studio_os/features/auth/ui/reset_password/reset_password_screen.dart';
 import 'package:studio_os/features/auth/ui/verify/verify_screen.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'package:studio_os/features/projects/ui/projects_screen.dart';
 
 part 'router.g.dart';
 
@@ -76,6 +77,7 @@ GoRouter router(Ref ref) {
           '/dashboard',
           '/settings',
           '/set-username',
+          '/projects',
         ];
         if (knownProtectedRoutes.contains(state.uri.path)) {
           return '/register';
@@ -147,6 +149,15 @@ GoRouter router(Ref ref) {
         path: '/404',
         name: 'not-found',
         builder: (context, state) => NotFoundScreen(uri: state.uri),
+      ),
+
+      //========================================================================
+      // PROJECTS
+      //========================================================================
+      GoRoute(
+        path: '/projects',
+        name: 'projects',
+        builder: (context, state) => ProjectsScreen(),
       ),
     ],
   );
