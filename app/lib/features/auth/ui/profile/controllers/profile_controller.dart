@@ -11,7 +11,7 @@ class ProfileController extends _$ProfileController {
     final result = await ref.read(authRepositoryProvider).getMe();
     return result.fold(
       ifLeft: (failure) => throw failure,
-      ifRight: (response) => response.data,
+      ifRight: (profile) => profile,
     );
   }
 
@@ -23,7 +23,7 @@ class ProfileController extends _$ProfileController {
 
     state = result.fold(
       ifLeft: (failure) => AsyncValue.error(failure, StackTrace.current),
-      ifRight: (response) => AsyncValue.data(response.data),
+      ifRight: (profile) => AsyncValue.data(profile),
     );
   }
 }

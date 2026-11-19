@@ -7,37 +7,48 @@ import 'package:studio_os/features/projects/data/remote/project_remote.dart';
 
 part 'project_repository.g.dart';
 
-/// The translator layer for the projects domain. Like AuthRepository, it
-/// mostly forwards to the remote — the interesting work (business rules,
-/// "can this caller do this") already happened on the server. What it does
-/// own is shape: methods here take and return typed models, so controllers
-/// never see a raw envelope.
+/// The translator layer for the projects domain. The remote speaks the wire
+/// contract — envelopes like {"data": ...} — and this layer turns that into
+/// the domain shapes the app works with: a list is a List, a project is a
+/// ProjectData. Controllers never see an envelope or a `response.data`.
 class ProjectRepository {
   final ProjectRemote _remote;
 
   ProjectRepository(this._remote);
 
+  /// Unwraps one success envelope, forwarding the failure untouched.
+  Future<Either<Failure, T>> _unwrap<T, R>(
+    Future<Either<Failure, R>> call,
+    T Function(R response) extract,
+  ) async {
+    final result = await call;
+    return result.fold(
+      ifLeft: (failure) => Left(failure),
+      ifRight: (response) => Right(extract(response)),
+    );
+  }
+
   // ==== PROJECTS ====
 
-  Future<Either<Failure, ProjectResponse>> createProject(
+  Future<Either<Failure, ProjectData>> createProject(
     CreateProjectRequest request,
   ) {
-    return _remote.createProject(request);
+    return _unwrap(_remote.createProject(request), (r) => r.data);
   }
 
-  Future<Either<Failure, ProjectListResponse>> listProjects() {
-    return _remote.listProjects();
+  Future<Either<Failure, List<ProjectData>>> listProjects() {
+    return _unwrap(_remote.listProjects(), (r) => r.data);
   }
 
-  Future<Either<Failure, ProjectResponse>> getProject(String projectId) {
-    return _remote.getProject(projectId);
+  Future<Either<Failure, ProjectData>> getProject(String projectId) {
+    return _unwrap(_remote.getProject(projectId), (r) => r.data);
   }
 
-  Future<Either<Failure, ProjectResponse>> updateProject(
+  Future<Either<Failure, ProjectData>> updateProject(
     String projectId,
     UpdateProjectRequest request,
   ) {
-    return _remote.updateProject(projectId, request);
+    return _unwrap(_remote.updateProject(projectId, request), (r) => r.data);
   }
 
   /// 403 project_owner_required lands here for non-owners — show it, don't
@@ -49,15 +60,17 @@ class ProjectRepository {
 
   // ==== MEMBERS ====
 
-  Future<Either<Failure, MemberListResponse>> listMembers(String projectId) {
-    return _remote.listMembers(projectId);
+  Future<Either<Failure, List<ProjectMemberData>>> listMembers(
+    String projectId,
+  ) {
+    return _unwrap(_remote.listMembers(projectId), (r) => r.data);
   }
 
-  Future<Either<Failure, ProjectMemberResponse>> addMember(
+  Future<Either<Failure, ProjectMemberData>> addMember(
     String projectId,
     AddMemberRequest request,
   ) {
-    return _remote.addMember(projectId, request);
+    return _unwrap(_remote.addMember(projectId, request), (r) => r.data);
   }
 
   Future<Either<Failure, void>> removeMember(String projectId, String userId) {
@@ -66,53 +79,53 @@ class ProjectRepository {
 
   // ==== TASKS ====
 
-  Future<Either<Failure, TaskResponse>> createTask(
+  Future<Either<Failure, TaskData>> createTask(
     String projectId,
     CreateTaskRequest request,
   ) {
-    return _remote.createTask(projectId, request);
+    return _unwrap(_remote.createTask(projectId, request), (r) => r.data);
   }
 
-  Future<Either<Failure, TaskListResponse>> listProjectTasks(String projectId) {
-    return _remote.listProjectTasks(projectId);
+  Future<Either<Failure, List<TaskData>>> listProjectTasks(String projectId) {
+    return _unwrap(_remote.listProjectTasks(projectId), (r) => r.data);
   }
 
-  Future<Either<Failure, TaskListResponse>> listMyTasks() {
-    return _remote.listMyTasks();
+  Future<Either<Failure, List<TaskData>>> listMyTasks() {
+    return _unwrap(_remote.listMyTasks(), (r) => r.data);
   }
 
-  Future<Either<Failure, TaskResponse>> getTask(String taskId) {
-    return _remote.getTask(taskId);
+  Future<Either<Failure, TaskData>> getTask(String taskId) {
+    return _unwrap(_remote.getTask(taskId), (r) => r.data);
   }
 
-  Future<Either<Failure, TaskResponse>> updateTask(
+  Future<Either<Failure, TaskData>> updateTask(
     String taskId,
     UpdateTaskRequest request,
   ) {
-    return _remote.updateTask(taskId, request);
+    return _unwrap(_remote.updateTask(taskId, request), (r) => r.data);
   }
 
-  Future<Either<Failure, TaskResponse>> setTaskStatus(
+  Future<Either<Failure, TaskData>> setTaskStatus(
     String taskId,
     SetTaskStatusRequest request,
   ) {
-    return _remote.setTaskStatus(taskId, request);
+    return _unwrap(_remote.setTaskStatus(taskId, request), (r) => r.data);
   }
 
   /// [request.assigneeId] == null unassigns.
-  Future<Either<Failure, TaskResponse>> setTaskAssignee(
+  Future<Either<Failure, TaskData>> setTaskAssignee(
     String taskId,
     SetTaskAssigneeRequest request,
   ) {
-    return _remote.setTaskAssignee(taskId, request);
+    return _unwrap(_remote.setTaskAssignee(taskId, request), (r) => r.data);
   }
 
   /// [request.dueDate] == null clears the due date.
-  Future<Either<Failure, TaskResponse>> setTaskDueDate(
+  Future<Either<Failure, TaskData>> setTaskDueDate(
     String taskId,
     SetTaskDueDateRequest request,
   ) {
-    return _remote.setTaskDueDate(taskId, request);
+    return _unwrap(_remote.setTaskDueDate(taskId, request), (r) => r.data);
   }
 
   Future<Either<Failure, void>> deleteTask(String taskId) {

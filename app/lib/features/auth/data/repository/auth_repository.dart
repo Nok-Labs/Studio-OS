@@ -74,16 +74,24 @@ class AuthRepository {
 
   /// Fetches the caller's identity from the server. The onboarding gate and
   /// the account screen both read this; it never touches tokens.
-  Future<Either<Failure, ProfileResponse>> getMe() async {
-    return await _remote.getProfile();
+  Future<Either<Failure, ProfileData>> getMe() async {
+    final result = await _remote.getProfile();
+    return result.fold(
+      ifLeft: (failure) => Left(failure),
+      ifRight: (response) => Right(response.data),
+    );
   }
 
   /// Partial profile update. Returns the server's fresh copy of the profile —
   /// prefer it over merging locally, so the app satisfies what's stored.
-  Future<Either<Failure, ProfileResponse>> updateMe(
+  Future<Either<Failure, ProfileData>> updateMe(
     ProfileUpdateRequest request,
   ) async {
-    return await _remote.updateMe(request);
+    final result = await _remote.updateMe(request);
+    return result.fold(
+      ifLeft: (failure) => Left(failure),
+      ifRight: (response) => Right(response.data),
+    );
   }
 }
 
